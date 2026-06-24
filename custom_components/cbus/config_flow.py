@@ -176,31 +176,89 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
 class CBusOptionsFlow(OptionsFlow):
     """Allow editing the list of C-Bus light groups after setup."""
 
+    # Form field for the "re-scan from C-Gate" checkbox.
+    CONF_RESCAN = "rescan"
+
     def __init__(self, entry: ConfigEntry) -> None:
         """Store the entry being edited."""
         self._entry = entry
+        # Holds light-group text to pre-fill after a re-scan, if requested.
+        self._rescanned_lights: str | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Edit the group list."""
+        """Edit the group list, optionally re-scanning C-Gate first."""
         if user_input is not None:
+            if user_input.get(self.CONF_RESCAN):
+                # Merge freshly discovered groups into whatever the user has,
+                # then re-show the form for confirmation (don't save yet).
+                self._rescanned_lights = await self._merge_discovered(
+                    user_input.get(CONF_GROUPS, "")
+                )
+                return await self._show_form(user_input)
             return self.async_create_entry(title="", data=_build_options(user_input))
 
-        def _as_text(key: str) -> str:
+        return await self._show_form(None)
+
+    async def _show_form(
+        self, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        """Render the options form, prefilled from options or a re-scan."""
+
+        def _stored(key: str) -> str:
             return "\n".join(
                 f"{k}:{v}" for k, v in self._entry.options.get(key, {}).items()
             )
 
+        def _current(key: str) -> str:
+            if user_input is not None:
+                return user_input.get(key, "")
+            return _stored(key)
+
+        lights = (
+            self._rescanned_lights
+            if self._rescanned_lights is not None
+            else _current(CONF_GROUPS)
+        )
         schema = vol.Schema(
             {
-                vol.Optional(CONF_GROUPS, default=_as_text(CONF_GROUPS)): str,
+                vol.Optional(CONF_GROUPS, default=lights): str,
                 vol.Optional(
-                    CONF_SWITCH_GROUPS, default=_as_text(CONF_SWITCH_GROUPS)
+                    CONF_SWITCH_GROUPS, default=_current(CONF_SWITCH_GROUPS)
                 ): str,
                 vol.Optional(
-                    CONF_COVER_GROUPS, default=_as_text(CONF_COVER_GROUPS)
+                    CONF_COVER_GROUPS, default=_current(CONF_COVER_GROUPS)
                 ): str,
+                vol.Optional(self.CONF_RESCAN, default=False): bool,
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def _merge_discovered(self, existing_text: str) -> str:
+        """Re-scan C-Gate and merge new groups into the existing light list.
+
+        Existing names are preserved; only groups not already present in any
+        of the three lists are appended, so a re-scan never clobbers the
+        user's manual edits or their switch/cover assignments.
+        """
+        client: CGateClient | None = self.hass.data.get(DOMAIN, {}).get(
+            self._entry.entry_id
+        )
+        if client is None:
+            return existing_text
+
+        try:
+            discovered = await client.async_discover_lighting_groups()
+        except CGateError:
+            return existing_text
+
+        existing = _parse_groups(existing_text)
+        # Groups already assigned to switches/covers shouldn't reappear here.
+        assigned = set(existing)
+        assigned |= {int(k) for k in self._entry.options.get(CONF_SWITCH_GROUPS, {})}
+        assigned |= {int(k) for k in self._entry.options.get(CONF_COVER_GROUPS, {})}
+        for gid, name in sorted(discovered.items()):
+            if gid not in assigned:
+                existing[gid] = name
+        return "\n".join(f"{k}:{v}" for k, v in sorted(existing.items()))

@@ -32,11 +32,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit C-Bus light groups",
+        "title": "Edit C-Bus groups",
+        "description": "Tick 'Re-scan from C-Gate' to detect groups added in C-Bus Toolkit since setup. New groups are appended to lights without touching your existing edits or switch/cover assignments.",
         "data": {
           "groups": "Light groups (one per line, e.g. 4:Kitchen)",
           "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
-          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
+          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)",
+          "rescan": "Re-scan from C-Gate"
         }
       }
     }

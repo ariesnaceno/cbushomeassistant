@@ -51,7 +51,11 @@ directory and restart Home Assistant.
 ## Configuration
 
 1. **Settings → Devices & Services → Add Integration → Clipsal C-Bus (C-Gate)**.
-2. Enter:
+2. The integration **auto-detects** the lighting groups (and their names)
+   defined in your C-Bus Toolkit project from C-Gate, and pre-fills them in a
+   confirmation step. You can later **re-scan** for newly added groups via the
+   integration's **Configure** button (tick *Re-scan from C-Gate*).
+3. Enter:
    - **Host / IP** of the C-Gate server.
    - **Project name** (exactly as loaded in C-Gate, e.g. `HOME`).
    - **Network number** (usually `254`).
@@ -83,6 +87,8 @@ button.
 | Covers (blinds/shutters with position) | ✅ |
 | Real-time feedback from physical switches | ✅ |
 | Auto-reconnect & state re-sync | ✅ |
+| Auto-detect groups from C-Bus Toolkit | ✅ |
+| Re-scan for new groups (Configure) | ✅ |
 | Multiple C-Gate projects / entries | ✅ |
 
 C-Bus levels (0–255) map directly to Home Assistant brightness (0–255).
