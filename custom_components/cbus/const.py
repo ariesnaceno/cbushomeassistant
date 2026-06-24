@@ -13,6 +13,10 @@ CONF_GROUPS = "groups"
 CONF_SWITCH_GROUPS = "switch_groups"
 CONF_COVER_GROUPS = "cover_groups"
 
+# Optional path to a C-Bus Toolkit project backup (.cbz or .xml) used to
+# auto-fill group names during setup. Not persisted in the config entry.
+CONF_PROJECT_FILE = "project_file"
+
 # A CNI's raw PCI serial-over-TCP port. Default for Clipsal CNI/CNI2.
 DEFAULT_PORT = 10001
 

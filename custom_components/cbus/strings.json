@@ -9,12 +9,23 @@
           "port": "TCP port (CNI default 10001)",
           "groups": "Light groups (one per line, e.g. 4:Kitchen)",
           "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
+          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)",
+          "project_file": "Optional: path to a C-Bus Toolkit backup (.cbz or .xml) to auto-fill names, e.g. /config/HOME.cbz"
+        }
+      },
+      "groups": {
+        "title": "Confirm C-Bus groups",
+        "description": "Auto-detected {count} lighting group(s) from the Toolkit project file. Edit the list if needed, and move any entries into the switch or cover boxes to expose them as those entity types.",
+        "data": {
+          "groups": "Light groups (one per line, e.g. 4:Kitchen)",
+          "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
           "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to the CNI. Check the IP/port, and that nothing else holds the CNI's single connection."
+      "cannot_connect": "Could not connect to the CNI. Check the IP/port, and that nothing else holds the CNI's single connection.",
+      "invalid_project_file": "Could not read the Toolkit project file at that path. Check the path and that it is a .cbz or .xml file."
     },
     "abort": {
       "already_configured": "This CNI is already configured."

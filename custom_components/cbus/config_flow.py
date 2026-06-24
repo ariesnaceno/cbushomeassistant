@@ -20,10 +20,12 @@ from .const import (
     CONF_COVER_GROUPS,
     CONF_GROUPS,
     CONF_PORT,
+    CONF_PROJECT_FILE,
     CONF_SWITCH_GROUPS,
     DEFAULT_PORT,
     DOMAIN,
 )
+from .toolkit import parse_toolkit_file
 
 
 def _parse_groups(raw: str) -> dict[int, str]:
@@ -72,23 +74,46 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 2
 
+    def __init__(self) -> None:
+        """Hold state between the connect and group-confirmation steps."""
+        self._conn: dict[str, Any] = {}
+        self._typed: dict[str, Any] = {}
+        self._discovered: dict[int, str] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Collect CNI connection details and the group lists."""
+        """Collect CNI connection details, group lists, and optional project."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             host = user_input[CONF_HOST]
             port = user_input[CONF_PORT]
+            project_path = (user_input.get(CONF_PROJECT_FILE) or "").strip()
+
             if not await _async_can_connect(host, port):
                 errors["base"] = "cannot_connect"
-            else:
+            elif project_path:
+                try:
+                    self._discovered = await self.hass.async_add_executor_job(
+                        parse_toolkit_file, project_path
+                    )
+                except OSError:
+                    errors["base"] = "invalid_project_file"
+
+            if not errors:
                 await self.async_set_unique_id(f"{host}:{port}")
                 self._abort_if_unique_id_configured()
+                self._conn = {CONF_HOST: host, CONF_PORT: port}
+                self._typed = user_input
+
+                if self._discovered:
+                    # Let the user confirm/assign the auto-detected names.
+                    return await self.async_step_groups()
+
                 return self.async_create_entry(
                     title=f"C-Bus CNI ({host})",
-                    data={CONF_HOST: host, CONF_PORT: port},
+                    data=self._conn,
                     options=_build_options(user_input),
                 )
 
@@ -99,10 +124,47 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_GROUPS, default=""): str,
                 vol.Optional(CONF_SWITCH_GROUPS, default=""): str,
                 vol.Optional(CONF_COVER_GROUPS, default=""): str,
+                vol.Optional(CONF_PROJECT_FILE, default=""): str,
             }
         )
         return self.async_show_form(
             step_id="user", data_schema=schema, errors=errors
+        )
+
+    async def async_step_groups(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm/assign the group names auto-detected from the project file."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title=f"C-Bus CNI ({self._conn[CONF_HOST]})",
+                data=self._conn,
+                options=_build_options(user_input),
+            )
+
+        # Merge anything the user typed on the first page with discovered names
+        # (typed names win), and pre-fill the lights box.
+        merged = dict(self._discovered)
+        merged.update(_parse_groups(self._typed.get(CONF_GROUPS, "")))
+        lights = "\n".join(f"{gid}:{name}" for gid, name in sorted(merged.items()))
+
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_GROUPS, default=lights): str,
+                vol.Optional(
+                    CONF_SWITCH_GROUPS,
+                    default=self._typed.get(CONF_SWITCH_GROUPS, ""),
+                ): str,
+                vol.Optional(
+                    CONF_COVER_GROUPS,
+                    default=self._typed.get(CONF_COVER_GROUPS, ""),
+                ): str,
+            }
+        )
+        return self.async_show_form(
+            step_id="groups",
+            data_schema=schema,
+            description_placeholders={"count": str(len(self._discovered))},
         )
 
     @staticmethod

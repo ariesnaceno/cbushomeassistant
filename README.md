@@ -60,6 +60,10 @@ directory and restart Home Assistant.
    - **Light groups** — dimmable lighting, one per line as `group:Friendly Name`.
    - **Switch groups** — non-dimmable relay loads (fans, pumps, exhausts).
    - **Cover groups** — blinds/shutters driven via the lighting application.
+   - **Project file** *(optional)* — path to a **C-Bus Toolkit** backup
+     (`.cbz` or `.xml`, e.g. `/config/HOME.cbz`). If supplied, the integration
+     reads your group **names** from it and pre-fills the list on a confirmation
+     page, so you don't have to type them.
 
    ```
    # Lights
@@ -74,9 +78,9 @@ directory and restart Home Assistant.
 You can edit any of the group lists later via the integration's **Configure**
 button.
 
-> **Tip — group names:** in direct-CNI mode there is no project database to read
-> names from. Export your group addresses and labels from **C-Bus Toolkit** and
-> paste them in. (Importing a Toolkit project file directly is on the roadmap.)
+> **Group names:** in direct-CNI mode there is no project database on the bus to
+> read names from. Either point the setup at a **C-Bus Toolkit** backup file to
+> auto-fill them (recommended), or type them manually as `address:Name`.
 
 ## Features
 
@@ -88,6 +92,7 @@ button.
 | Covers (blinds/shutters with position) | ✅ |
 | Real-time feedback from physical switches | ✅ |
 | Auto-reconnect (re-runs PCI init) | ✅ |
+| Auto-fill group names from Toolkit `.cbz`/`.xml` | ✅ |
 | No C-Gate / no MQTT broker required | ✅ |
 
 C-Bus levels (0–255) map directly to Home Assistant brightness (0–255).
@@ -119,8 +124,11 @@ startup are on the roadmap.)
 
 ## Development
 
-`python3 tests/test_encoding.py` checks the exact on-wire bytes for lighting
-commands (no hardware needed).
+No hardware needed:
+
+- `python3 tests/test_encoding.py` — checks the exact on-wire bytes for lighting
+  commands.
+- `python3 tests/test_toolkit.py` — checks the Toolkit `.cbz`/`.xml` name parser.
 
 ## License
 
