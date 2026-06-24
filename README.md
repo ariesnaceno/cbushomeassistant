@@ -203,6 +203,13 @@ need to program with Toolkit:
       cbus: debug
   ```
 
+## Icon
+
+Home Assistant shows integration logos from the central `home-assistant/brands`
+repo, so a custom integration shows "icon not available" until its icon is merged
+there. Brands-ready assets and submission steps live in
+[`brands/`](brands/). (Cosmetic only — the integration works without it.)
+
 ## Development
 
 No hardware needed:
