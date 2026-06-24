@@ -35,6 +35,9 @@ from cbus.protocol.pciprotocol import PCIProtocol  # noqa: E402
 _LOGGER = logging.getLogger(__name__)
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
+_IN_USE_DELAY = 30.0  # longer back-off when the CNI is held by another client
+# A CNI allows only one TCP client; it rejects extras with this banner.
+_IN_USE_MARKER = b"already in use"
 
 
 class _HAProtocol(PCIProtocol):
@@ -44,6 +47,13 @@ class _HAProtocol(PCIProtocol):
         """Store a back-reference to the owning client."""
         self._client = client
         super().__init__(**kwargs)
+
+    def data_received(self, data: bytes) -> None:
+        """Intercept the CNI's single-session rejection before decoding."""
+        if _IN_USE_MARKER in data:
+            self._client._note_in_use()
+            return  # don't feed the plain-text banner to the packet decoder
+        super().data_received(data)
 
     def on_lighting_group_on(self, source_addr: int, group_addr: int) -> None:
         self._client._apply_level(group_addr, CBUS_MAX_LEVEL)
@@ -74,6 +84,8 @@ class PCIClient:
         self._connect_task: asyncio.Task | None = None
         self._closing = False
         self._connected = False
+        self._in_use = False  # set when the CNI rejects us as already-in-use
+        self._fail_count = 0  # consecutive connect failures (for log throttling)
 
         # group id -> last known level (0..255). Absent = unknown.
         self._levels: dict[int, int] = {}
@@ -183,6 +195,7 @@ class PCIClient:
         loop = asyncio.get_running_loop()
         while not self._closing:
             lost_future: asyncio.Future = loop.create_future()
+            self._in_use = False
             try:
                 _transport, protocol = await loop.create_connection(
                     lambda: _HAProtocol(
@@ -195,18 +208,13 @@ class PCIClient:
                     self._port,
                 )
             except OSError as err:
-                _LOGGER.warning(
-                    "Cannot connect to CNI %s:%s (%s); retrying in %ss",
-                    self._host,
-                    self._port,
-                    err,
-                    _RECONNECT_DELAY,
-                )
+                self._log_retry(f"cannot reach CNI ({err})", _RECONNECT_DELAY)
                 await asyncio.sleep(_RECONNECT_DELAY)
                 continue
 
             self._protocol = protocol  # type: ignore[assignment]
             self._set_connected(True)
+            self._fail_count = 0
             _LOGGER.info(
                 "Connected to C-Bus CNI %s:%s (SMART+MONITOR mode)",
                 self._host,
@@ -221,11 +229,33 @@ class PCIClient:
                 self._set_connected(False)
                 self._protocol = None
 
-            if not self._closing:
-                _LOGGER.warning(
-                    "C-Bus CNI link dropped; reconnecting in %ss", _RECONNECT_DELAY
+            if self._closing:
+                break
+
+            # If the CNI rejected us as "already in use", another client owns
+            # its single session — back off longer and say so clearly.
+            if self._in_use:
+                self._log_retry(
+                    "CNI reports its single connection is already in use by "
+                    "another client (e.g. Toolkit, C-Gate, or a cbus2mqtt/cmqttd "
+                    "add-on) — stop that client to free the CNI",
+                    _IN_USE_DELAY,
                 )
+                await asyncio.sleep(_IN_USE_DELAY)
+            else:
+                self._log_retry("CNI link dropped", _RECONNECT_DELAY)
                 await asyncio.sleep(_RECONNECT_DELAY)
+
+    def _log_retry(self, reason: str, delay: float) -> None:
+        """Log a reconnect reason, throttled so it doesn't flood the log."""
+        self._fail_count += 1
+        message = "C-Bus: %s; retrying in %ss (attempt %d)"
+        # Log the first few attempts at WARNING, then drop to DEBUG so a
+        # persistent problem leaves one clear note instead of flooding.
+        if self._fail_count <= 3:
+            _LOGGER.warning(message, reason, delay, self._fail_count)
+        else:
+            _LOGGER.debug(message, reason, delay, self._fail_count)
 
     def _teardown_protocol(self) -> None:
         """Best-effort close of the transport."""
@@ -255,6 +285,10 @@ class PCIClient:
         _LOGGER.debug("Group %s level -> %s", group, level)
         for callback in list(self._update_callbacks):
             callback(group, level)
+
+    def _note_in_use(self) -> None:
+        """Flag that the CNI rejected this connection as already in use."""
+        self._in_use = True
 
     def _set_connected(self, connected: bool) -> None:
         """Update connection state and notify listeners on change."""
