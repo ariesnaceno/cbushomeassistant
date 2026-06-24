@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -115,10 +116,17 @@ def setup_group_platform(
         if to_add:
             async_add_entities(to_add)
 
+        registry = er.async_get(hass)
         for addr in list(known):
             if addr not in want:
                 entity = known.pop(addr)
-                hass.async_create_task(entity.async_remove(force_remove=True))
+                # Remove the registry entry too (cascades to removing the live
+                # entity); plain async_remove can leave an orphan registry row.
+                entity_id = entity.entity_id
+                if entity_id and registry.async_get(entity_id):
+                    registry.async_remove(entity_id)
+                else:
+                    hass.async_create_task(entity.async_remove(force_remove=True))
 
     _reconcile()
     entry.async_on_unload(

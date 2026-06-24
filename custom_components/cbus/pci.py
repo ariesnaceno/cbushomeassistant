@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import socket
 import sys
 from collections.abc import Callable
 
@@ -33,6 +34,35 @@ if _VENDOR_DIR not in sys.path:
 from cbus.protocol.pciprotocol import PCIProtocol  # noqa: E402
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _enable_tcp_keepalive(transport) -> None:
+    """Turn on TCP keep-alive so a dead/half-open CNI link is detected fast.
+
+    Without this, a connection silently dropped by the CNI or the network can
+    linger as a half-open socket: Home Assistant keeps thinking it is connected
+    while the CNI has already freed (or zombied) the session. Keep-alive probes
+    surface the break within ~1 minute and close our side cleanly, which lets us
+    reconnect promptly and helps the CNI release the old session.
+    """
+    sock = transport.get_extra_info("socket")
+    if sock is None:
+        return
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        # Linux-only fine-tuning (Home Assistant OS): start probing after 30s
+        # idle, probe every 10s, drop after 3 failed probes (~60s to detect).
+        for name, value in (
+            ("TCP_KEEPIDLE", 30),
+            ("TCP_KEEPINTVL", 10),
+            ("TCP_KEEPCNT", 3),
+        ):
+            opt = getattr(socket, name, None)
+            if opt is not None:
+                sock.setsockopt(socket.IPPROTO_TCP, opt, value)
+    except OSError as err:
+        _LOGGER.debug("Could not set TCP keep-alive: %s", err)
+
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
 _IN_USE_DELAY = 30.0  # longer back-off when the CNI is held by another client
@@ -217,6 +247,7 @@ class PCIClient:
                 continue
 
             self._protocol = protocol  # type: ignore[assignment]
+            _enable_tcp_keepalive(_transport)
 
             # The TCP connection succeeds even when the CNI is going to reject
             # us: it accepts the socket, sends "*** Connection already in use",
