@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to C-Gate",
+        "description": "Enter the address of your running C-Gate server. C-Gate must have the command and status-change ports enabled in access.txt.",
+        "data": {
+          "host": "C-Gate host / IP address",
+          "project": "C-Gate project name",
+          "network": "C-Bus network number",
+          "command_port": "Command port",
+          "status_port": "Status-change port",
+          "groups": "Light groups (one per line, e.g. 4:Kitchen)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not connect to C-Gate. Check the host, ports, and that C-Gate is running."
+    },
+    "abort": {
+      "already_configured": "This C-Gate project is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit C-Bus light groups",
+        "data": {
+          "groups": "Light groups (one per line, e.g. 4:Kitchen)"
+        }
+      }
+    }
+  }
+}
