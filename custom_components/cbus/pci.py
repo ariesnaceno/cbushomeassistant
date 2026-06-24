@@ -83,10 +83,15 @@ def _abort_transport(transport) -> None:
             )
         except OSError as err:
             _LOGGER.debug("Could not set SO_LINGER: %s", err)
+    # abort() drops the connection immediately; with SO_LINGER=0 that's a RST.
     try:
-        transport.close()
-    except OSError:
-        pass
+        transport.abort()
+    except Exception:  # noqa: BLE001 - best effort during shutdown
+        try:
+            transport.close()
+        except OSError:
+            pass
+    _LOGGER.debug("Aborted CNI transport (RST) to release the session")
 
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
@@ -206,15 +211,22 @@ class PCIClient:
         await asyncio.sleep(0)
 
     async def async_stop(self) -> None:
-        """Close the connection and stop reconnecting."""
+        """Close the connection (RST) and stop reconnecting.
+
+        Abort the live transport *before* cancelling the connect loop: the
+        loop's own cleanup nulls the transport reference, so if we cancelled
+        first we'd have nothing left to abort and the socket would be abandoned
+        (leaving the CNI holding a zombie session).
+        """
         self._closing = True
+        transport, self._transport, self._protocol = self._transport, None, None
+        _abort_transport(transport)
         if self._connect_task:
             self._connect_task.cancel()
             try:
                 await self._connect_task
             except asyncio.CancelledError:
                 pass
-        self._teardown_protocol()
 
     async def async_turn_on(self, group: int, level: int = CBUS_MAX_LEVEL) -> None:
         """Turn a group on, optionally to a specific level (0..255)."""
@@ -340,15 +352,6 @@ class PCIClient:
             _LOGGER.warning(message, reason, delay, self._fail_count)
         else:
             _LOGGER.debug(message, reason, delay, self._fail_count)
-
-    def _teardown_protocol(self) -> None:
-        """Abortively close the transport (RST) so the CNI frees its session."""
-        transport = self._transport
-        if transport is None and self._protocol is not None:
-            transport = self._protocol._transport  # noqa: SLF001
-        self._protocol = None
-        self._transport = None
-        _abort_transport(transport)
 
     def _require_protocol(self) -> _HAProtocol:
         """Return the live protocol or raise if not connected."""
