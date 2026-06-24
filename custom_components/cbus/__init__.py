@@ -8,8 +8,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .const import CONF_PORT, DOMAIN, PLATFORMS
+from .const import CONF_PORT, DOMAIN, PLATFORMS, signal_options_updated
 from .pci import PCIClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,5 +43,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when its options change."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Apply option (group) changes without reloading.
+
+    A full reload would tear down and re-open the CNI connection, which a CNI
+    can briefly reject ("already in use") while it releases the old session.
+    Instead we signal the platforms to reconcile their entities in place, so
+    editing groups never disturbs the live connection.
+    """
+    async_dispatcher_send(hass, signal_options_updated(entry.entry_id))

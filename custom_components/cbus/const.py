@@ -31,4 +31,9 @@ CBUS_MAX_LEVEL = 255
 SIGNAL_GROUP_UPDATE = f"{DOMAIN}_group_update"
 SIGNAL_CONNECTION_UPDATE = f"{DOMAIN}_connection_update"
 
+
+def signal_options_updated(entry_id: str) -> str:
+    """Dispatcher signal fired when an entry's group options change."""
+    return f"{DOMAIN}_options_updated_{entry_id}"
+
 PLATFORMS = ["light", "switch", "cover"]
