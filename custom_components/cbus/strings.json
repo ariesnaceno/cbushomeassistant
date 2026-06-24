@@ -34,12 +34,61 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit C-Bus groups",
-        "data": {
-          "groups": "Light groups (one per line, e.g. 4:Kitchen)",
-          "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
-          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
+        "title": "C-Bus groups",
+        "description": "Currently configured: {summary}.\n\nChoose an action.",
+        "menu_options": {
+          "pick_toolkit": "Pick from a C-Bus Toolkit file (checklist)",
+          "add_light": "➕ Add a light",
+          "add_switch": "➕ Add a switch",
+          "add_cover": "➕ Add a cover",
+          "remove": "🗑 Remove groups",
+          "save": "💾 Save and finish"
         }
+      },
+      "pick_toolkit": {
+        "title": "Load a C-Bus Toolkit file",
+        "description": "Enter the path to a C-Bus Toolkit backup (.cbz or .xml) on the Home Assistant host, e.g. /config/HOME.cbz. Its lighting groups will be shown as a checklist.",
+        "data": {
+          "project_file": "Toolkit project file path"
+        }
+      },
+      "pick": {
+        "title": "Pick the groups to add",
+        "description": "Found {count} group(s). Tick the ones you want, choose the entity type, and submit. Repeat the menu to add more or a different type.",
+        "data": {
+          "groups": "C-Bus groups",
+          "type": "Add as"
+        }
+      },
+      "add_light": {
+        "title": "Add a light",
+        "data": { "address": "Group address (0–255)", "name": "Name (optional)" }
+      },
+      "add_switch": {
+        "title": "Add a switch",
+        "data": { "address": "Group address (0–255)", "name": "Name (optional)" }
+      },
+      "add_cover": {
+        "title": "Add a cover",
+        "data": { "address": "Group address (0–255)", "name": "Name (optional)" }
+      },
+      "remove": {
+        "title": "Remove groups",
+        "description": "Tick the groups to remove, then submit.",
+        "data": { "remove": "Groups to remove" }
+      }
+    },
+    "error": {
+      "invalid_project_file": "Could not read that Toolkit file. Check the path and that it is a .cbz or .xml.",
+      "no_groups_found": "No lighting groups were found in that Toolkit file."
+    }
+  },
+  "selector": {
+    "cbus_kind": {
+      "options": {
+        "light": "Light (dimmable)",
+        "switch": "Switch (relay on/off)",
+        "cover": "Cover (blind/shutter)"
       }
     }
   }

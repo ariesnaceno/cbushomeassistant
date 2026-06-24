@@ -129,8 +129,18 @@ directory and restart Home Assistant.
    30:Living Room Blind
    ```
 
-You can edit any of the group lists later via the integration's **Configure**
-button.
+### Managing groups after setup (menu)
+
+Open the integration's **Configure** button any time for a simple menu:
+
+- **Pick from a C-Bus Toolkit file** — enter a `.cbz`/`.xml` path and get a
+  **checklist of every group**; tick the ones you want and choose the type.
+- **➕ Add a light / switch / cover** — enter a group number and name; repeat to
+  add more.
+- **🗑 Remove groups** — tick groups to remove.
+- **💾 Save and finish** — applies your changes.
+
+No need to hand-type `address:Name` lines unless you want to.
 
 > **Group names:** in direct-CNI mode there is no project database on the bus to
 > read names from. Either point the setup at a **C-Bus Toolkit** backup file to
