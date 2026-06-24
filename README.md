@@ -11,6 +11,60 @@ a PIR/occupancy sensor, a timer, or any other unit. Home Assistant therefore
 always reflects the true state of the bus. This is a `local_push` integration:
 no polling, instant updates.
 
+## Quick start — fresh Home Assistant + new C-Bus project
+
+Short answer: you install the repo **and** do a 2-minute setup (point it at your
+CNI and list your group addresses). Here's the whole thing, start to finish.
+
+**Before you start, make sure:**
+- Your **CNI is on the network** and you know its **IP address** (check your
+  router's client list, or open `http://<cni-ip>/` to confirm it's a Clipsal CNI).
+- Your **C-Bus network is powered** and has devices on it. Open `http://<cni-ip>/`
+  — it should say **C-Bus status: OK** with **~30–36 V**. If it says "Power down",
+  fix the C-Bus power supply first.
+- **Nothing else is connected to the CNI.** A CNI allows only **one** connection.
+  Quit/stop C-Bus Toolkit, C-Gate, cbus2mqtt/cmqttd, or any other controller that
+  talks to this CNI. (Toolkit can't be connected at the same time as this — see
+  [Using C-Bus Toolkit alongside](#using-c-bus-toolkit-alongside).)
+
+**Steps:**
+
+1. **Find your group addresses.** In **C-Bus Toolkit**, note the lighting group
+   addresses (0–255) and names you want in Home Assistant — e.g. `4 = Kitchen`,
+   `1 = Living Room`. *(Optional: export a project backup `.cbz` to auto-fill the
+   names — step 4.)* Then **disconnect Toolkit from the CNI.**
+
+2. **Install the integration** (via HACS — recommended):
+   - HACS → **⋮ → Custom repositories** → add
+     `https://github.com/ariesnaceno/cbushomeassistant` as type **Integration**.
+   - Find **“Clipsal C-Bus (CNI)”** → **Download** → **Restart Home Assistant**.
+   - *(No HACS? See [Manual install](#manual). Or run `scripts/install.sh` from
+     the Terminal add-on.)*
+
+3. **Add the integration:** **Settings → Devices & Services → Add Integration →
+   “Clipsal C-Bus (CNI)”.**
+
+4. **Fill in the form:**
+   - **Host / IP** = your CNI's IP (e.g. `192.168.1.50`)
+   - **Port** = `10001` (CNI default)
+   - **Light groups** — one per line as `address:Name`, e.g.
+     ```
+     1:Living Room
+     4:Kitchen
+     ```
+   - **Switch groups** / **Cover groups** — same format, for relay loads / blinds.
+   - **Project file** *(optional)* — path to a Toolkit `.cbz`/`.xml` (e.g.
+     `/config/HOME.cbz`) to auto-fill the names instead of typing them.
+
+5. **Done.** Your C-Bus lights/switches/covers appear as entities. Toggle one in
+   Home Assistant — the physical load responds, and flipping the wall switch
+   updates Home Assistant instantly. Add more or rename later via the
+   integration's **Configure** button.
+
+> **If something's not connecting,** it's almost always the single-connection
+> rule (step "Before you start") or an unpowered bus. See
+> [Troubleshooting](#troubleshooting).
+
 ## How it works
 
 ```
@@ -103,6 +157,23 @@ Because there is no level database to poll, a group's state is **unknown until
 the first event** (any change on the bus, or a command from Home Assistant).
 After that, MONITOR mode keeps it accurate. (Optional level status-requests on
 startup are on the roadmap.)
+
+## Using C-Bus Toolkit alongside
+
+A CNI accepts **only one** connection at a time, so Home Assistant and C-Bus
+Toolkit **cannot both be connected to the same CNI simultaneously**. When you
+need to program with Toolkit:
+
+1. In Home Assistant, **disable** the integration entry (Settings → Devices &
+   Services → C-Bus → ⋮ → **Disable**), or stop Home Assistant.
+2. Connect with Toolkit, do your work, then **disconnect Toolkit**.
+3. **Re-enable** the integration in Home Assistant.
+
+> Tip: after the integration has held the CNI, an abrupt disconnect can leave the
+> CNI holding a stale session. If Home Assistant then reports
+> `*** Connection already in use` and won't reconnect, **power-cycle the CNI** to
+> clear it. If you need Toolkit and Home Assistant connected at the same time,
+> use a C-Gate-based setup instead (C-Gate multiplexes the single CNI link).
 
 ## Troubleshooting
 
