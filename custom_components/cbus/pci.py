@@ -78,20 +78,21 @@ def _abort_transport(transport) -> None:
     sock = transport.get_extra_info("socket")
     if sock is not None:
         try:
+            # SO_LINGER with a 0 timeout makes close() send a TCP RST.
             sock.setsockopt(
                 socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
             )
+            # Close the raw socket *synchronously* so the RST is on the wire
+            # before Home Assistant stops the event loop on shutdown — a
+            # transport.abort() defers the close and may never be flushed.
+            sock.close()
+            _LOGGER.debug("Sent RST to CNI to release the session")
         except OSError as err:
-            _LOGGER.debug("Could not set SO_LINGER: %s", err)
-    # abort() drops the connection immediately; with SO_LINGER=0 that's a RST.
+            _LOGGER.debug("Could not RST-close CNI socket: %s", err)
     try:
         transport.abort()
-    except Exception:  # noqa: BLE001 - best effort during shutdown
-        try:
-            transport.close()
-        except OSError:
-            pass
-    _LOGGER.debug("Aborted CNI transport (RST) to release the session")
+    except Exception:  # noqa: BLE001 - best effort, socket may already be closed
+        pass
 
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
