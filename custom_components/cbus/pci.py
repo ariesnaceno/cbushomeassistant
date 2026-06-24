@@ -36,6 +36,10 @@ _LOGGER = logging.getLogger(__name__)
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
 _IN_USE_DELAY = 30.0  # longer back-off when the CNI is held by another client
+# How long a new connection must stay up before we treat it as genuinely
+# connected. The CNI rejects extra clients (and closes) within ~1s, so this
+# distinguishes a real session from an "already in use" rejection.
+_HANDSHAKE_GRACE = 3.0
 # A CNI allows only one TCP client; it rejects extras with this banner.
 _IN_USE_MARKER = b"already in use"
 
@@ -213,6 +217,38 @@ class PCIClient:
                 continue
 
             self._protocol = protocol  # type: ignore[assignment]
+
+            # The TCP connection succeeds even when the CNI is going to reject
+            # us: it accepts the socket, sends "*** Connection already in use",
+            # then closes within ~1s. Wait a short grace period to tell a real
+            # connection apart from an immediate rejection, so we never report
+            # "connected" for a session we didn't actually get.
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(lost_future), timeout=_HANDSHAKE_GRACE
+                )
+                handshake_ok = False  # dropped during grace -> rejected/failed
+            except asyncio.TimeoutError:
+                handshake_ok = True  # survived the grace -> genuinely connected
+
+            if not handshake_ok:
+                self._protocol = None
+                if self._closing:
+                    break
+                if self._in_use:
+                    self._log_retry(
+                        "CNI reports its single connection is already in use by "
+                        "another client (e.g. Toolkit, C-Gate, or a "
+                        "cbus2mqtt/cmqttd add-on) — stop that client to free the "
+                        "CNI",
+                        _IN_USE_DELAY,
+                    )
+                    await asyncio.sleep(_IN_USE_DELAY)
+                else:
+                    self._log_retry("CNI dropped during handshake", _RECONNECT_DELAY)
+                    await asyncio.sleep(_RECONNECT_DELAY)
+                continue
+
             self._set_connected(True)
             self._fail_count = 0
             _LOGGER.info(
@@ -232,19 +268,8 @@ class PCIClient:
             if self._closing:
                 break
 
-            # If the CNI rejected us as "already in use", another client owns
-            # its single session — back off longer and say so clearly.
-            if self._in_use:
-                self._log_retry(
-                    "CNI reports its single connection is already in use by "
-                    "another client (e.g. Toolkit, C-Gate, or a cbus2mqtt/cmqttd "
-                    "add-on) — stop that client to free the CNI",
-                    _IN_USE_DELAY,
-                )
-                await asyncio.sleep(_IN_USE_DELAY)
-            else:
-                self._log_retry("CNI link dropped", _RECONNECT_DELAY)
-                await asyncio.sleep(_RECONNECT_DELAY)
+            self._log_retry("CNI link dropped", _RECONNECT_DELAY)
+            await asyncio.sleep(_RECONNECT_DELAY)
 
     def _log_retry(self, reason: str, delay: float) -> None:
         """Log a reconnect reason, throttled so it doesn't flood the log."""
