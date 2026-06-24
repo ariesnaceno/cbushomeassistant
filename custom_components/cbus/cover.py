@@ -1,11 +1,11 @@
-"""Cover platform for the C-Bus (C-Gate) integration.
+"""Cover platform for the C-Bus (direct CNI) integration.
 
 Use this for C-Bus blind / shutter / awning groups that are controlled through
 the lighting application, where the group *level* represents the open position:
 level 255 (100%) = fully open, level 0 = fully closed.
 
-Position changes are driven with C-Gate ramp commands, and the open/closed
-position is kept accurate from C-Gate's real-time status-change stream — so the
+Position changes are driven with C-Bus ramp commands, and the open/closed
+position is kept accurate from the CNI's real-time MONITOR-mode events — so the
 cover reflects movement triggered from wall switches or scenes too.
 """
 
@@ -24,7 +24,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .cgate import CGateClient
+from .pci import PCIClient
 from .const import CBUS_MAX_LEVEL, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C-Bus covers from a config entry."""
-    client: CGateClient = hass.data[DOMAIN][entry.entry_id]
+    client: PCIClient = hass.data[DOMAIN][entry.entry_id]
     groups: dict[str, str] = entry.options.get(CONF_COVER_GROUPS, {})
 
     entities = [
@@ -64,7 +64,7 @@ class CBusCover(CoverEntity):
 
     def __init__(
         self,
-        client: CGateClient,
+        client: PCIClient,
         entry: ConfigEntry,
         group: int,
         name: str,
@@ -78,9 +78,9 @@ class CBusCover(CoverEntity):
         self._unsub_conn = None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"C-Bus ({client.project})",
+            name=f"C-Bus ({client.name})",
             manufacturer="Clipsal",
-            model="C-Bus via C-Gate",
+            model="C-Bus via CNI",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -107,7 +107,7 @@ class CBusCover(CoverEntity):
 
     @property
     def available(self) -> bool:
-        """Return True only while C-Gate is connected."""
+        """Return True only while the CNI link is up."""
         return self._client.connected
 
     @property

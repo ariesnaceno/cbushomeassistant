@@ -2,20 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to C-Gate",
-        "description": "Enter the address of your running C-Gate server. C-Gate must have the command and status-change ports enabled in access.txt.",
+        "title": "Connect to C-Bus CNI/PCI",
+        "description": "Enter the IP address and TCP port of your C-Bus CNI (or serial-over-TCP PCI). Then list your group addresses. Note: a CNI allows only one connection at a time.",
         "data": {
-          "host": "C-Gate host / IP address",
-          "project": "C-Gate project name",
-          "network": "C-Bus network number",
-          "command_port": "Command port",
-          "status_port": "Status-change port"
-        }
-      },
-      "groups": {
-        "title": "Confirm C-Bus groups",
-        "description": "Auto-detected {count} lighting group(s) from the C-Bus Toolkit project. Edit the list if needed, and move any entries into the switch or cover boxes to expose them as those entity types.",
-        "data": {
+          "host": "CNI host / IP address",
+          "port": "TCP port (CNI default 10001)",
           "groups": "Light groups (one per line, e.g. 4:Kitchen)",
           "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
           "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
@@ -23,22 +14,20 @@
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to C-Gate. Check the host, ports, and that C-Gate is running."
+      "cannot_connect": "Could not connect to the CNI. Check the IP/port, and that nothing else holds the CNI's single connection."
     },
     "abort": {
-      "already_configured": "This C-Gate project is already configured."
+      "already_configured": "This CNI is already configured."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Edit C-Bus groups",
-        "description": "Tick 'Re-scan from C-Gate' to detect groups added in C-Bus Toolkit since setup. New groups are appended to lights without touching your existing edits or switch/cover assignments.",
         "data": {
           "groups": "Light groups (one per line, e.g. 4:Kitchen)",
           "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
-          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)",
-          "rescan": "Re-scan from C-Gate"
+          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
         }
       }
     }

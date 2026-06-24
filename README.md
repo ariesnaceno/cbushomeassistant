@@ -1,47 +1,50 @@
-# Clipsal C-Bus integration for Home Assistant
+# Clipsal C-Bus integration for Home Assistant (direct CNI/PCI)
 
 A custom [Home Assistant](https://www.home-assistant.io/) integration that
-connects **Clipsal C-Bus** lighting to Home Assistant through a **C-Gate**
-server, with **accurate, real-time status feedback**.
+connects **Clipsal C-Bus** lighting to Home Assistant by talking **directly to a
+C-Bus CNI** (or serial-over-TCP PCI) — **no C-Gate server required** — with
+**accurate, real-time status feedback**.
 
-Whenever a C-Bus group changes — from Home Assistant, a physical wall switch, a
-scene, a PIR/occupancy sensor, a timer, or any other bus event — Home Assistant
-reflects the change immediately. This is achieved by listening to C-Gate's
-**status-change stream** rather than polling, so the state in Home Assistant
-always matches the real state of the bus.
+The CNI is placed into **SMART + MONITOR** mode, so it reports *every* lighting
+change on the bus — whether it came from Home Assistant, a wall switch, a scene,
+a PIR/occupancy sensor, a timer, or any other unit. Home Assistant therefore
+always reflects the true state of the bus. This is a `local_push` integration:
+no polling, instant updates.
 
 ## How it works
 
 ```
- C-Bus network ──(PCI / CNI)── C-Gate ──┬── command port (20023)  ← HA sends on/off/ramp + queries levels
-                                        └── status-change port (20025) → HA receives real-time level changes
+ C-Bus network ──(PCI)── CNI ──TCP:10001── Home Assistant (this integration)
+                                              ├─ sends on/off/ramp commands
+                                              └─ receives MONITOR-mode events  ← accurate feedback
 ```
 
-* **`local_push`** integration — no polling, instant updates.
-* On every (re)connect, the integration re-queries each configured group's
-  level so state can never silently drift.
-* Automatic reconnection if C-Gate restarts or the network drops.
+The raw C-Bus serial protocol is handled by a vendored copy of the proven
+[`cbus`/libcbus](https://github.com/micolous/cbus) protocol library (see
+[`custom_components/cbus/vendor/`](custom_components/cbus/vendor/) and its
+`NOTICE.md`). Our integration adds the Home Assistant entities, connection
+management (auto-reconnect, re-runs the PCI init sequence), and a group-level
+state cache.
 
 ## Requirements
 
-1. A running **C-Gate** server (Clipsal's free C-Bus server software) with
-   network access from your Home Assistant host.
-2. C-Gate's TCP ports enabled for your Home Assistant host. Edit C-Gate's
-   `config/access.txt` to allow your HA IP, then ensure these are enabled in
-   `config/C-GateConfig.txt`:
-   - `command.port=20023`
-   - `event.port=20024`
-   - `status-change.port=20025`
-3. Your C-Bus project loaded and started in C-Gate (e.g. `project load HOME`
-   then `project start HOME`).
+1. A **C-Bus CNI** (e.g. 5500CN/CN2) or a PCI exposed over TCP, reachable from
+   Home Assistant on its raw port (default **10001**).
+2. **Exclusive access to the CNI.** A CNI allows only **one** TCP connection at
+   a time. While Home Assistant is connected you cannot also have C-Bus Toolkit,
+   C-Gate, or another controller connected to the same CNI. (If you need shared
+   access, use a C-Gate-based setup instead.)
+3. A powered, working C-Bus network. You can check the CNI's own status page at
+   `http://<cni-ip>/` — it should report **C-Bus status: OK** with a network
+   voltage of roughly **30–36 V**.
 
 ## Installation
 
 ### HACS (recommended)
 
-1. In HACS → **Integrations** → ⋮ → **Custom repositories**.
+1. HACS → **Integrations** → ⋮ → **Custom repositories**.
 2. Add `https://github.com/ariesnaceno/cbushomeassistant` as an **Integration**.
-3. Install **Clipsal C-Bus (C-Gate)** and restart Home Assistant.
+3. Install **Clipsal C-Bus (CNI)** and restart Home Assistant.
 
 ### Manual
 
@@ -50,32 +53,30 @@ directory and restart Home Assistant.
 
 ## Configuration
 
-1. **Settings → Devices & Services → Add Integration → Clipsal C-Bus (C-Gate)**.
-2. The integration **auto-detects** the lighting groups (and their names)
-   defined in your C-Bus Toolkit project from C-Gate, and pre-fills them in a
-   confirmation step. You can later **re-scan** for newly added groups via the
-   integration's **Configure** button (tick *Re-scan from C-Gate*).
-3. Enter:
-   - **Host / IP** of the C-Gate server.
-   - **Project name** (exactly as loaded in C-Gate, e.g. `HOME`).
-   - **Network number** (usually `254`).
-   - **Command port** (`20023`) and **Status-change port** (`20025`).
+1. **Settings → Devices & Services → Add Integration → Clipsal C-Bus (CNI)**.
+2. Enter:
+   - **Host / IP** of the CNI.
+   - **TCP port** (CNI default `10001`).
    - **Light groups** — dimmable lighting, one per line as `group:Friendly Name`.
    - **Switch groups** — non-dimmable relay loads (fans, pumps, exhausts).
    - **Cover groups** — blinds/shutters driven via the lighting application.
 
-     ```
-     # Lights
-     1:Living Room
-     4:Kitchen
-     # Switches
-     12:Exhaust Fan
-     # Covers
-     30:Living Room Blind
-     ```
+   ```
+   # Lights
+   1:Living Room
+   4:Kitchen
+   # Switches
+   12:Exhaust Fan
+   # Covers
+   30:Living Room Blind
+   ```
 
 You can edit any of the group lists later via the integration's **Configure**
 button.
+
+> **Tip — group names:** in direct-CNI mode there is no project database to read
+> names from. Export your group addresses and labels from **C-Bus Toolkit** and
+> paste them in. (Importing a Toolkit project file directly is on the roadmap.)
 
 ## Features
 
@@ -86,27 +87,42 @@ button.
 | Switches (relay on/off groups) | ✅ |
 | Covers (blinds/shutters with position) | ✅ |
 | Real-time feedback from physical switches | ✅ |
-| Auto-reconnect & state re-sync | ✅ |
-| Auto-detect groups from C-Bus Toolkit | ✅ |
-| Re-scan for new groups (Configure) | ✅ |
-| Multiple C-Gate projects / entries | ✅ |
+| Auto-reconnect (re-runs PCI init) | ✅ |
+| No C-Gate / no MQTT broker required | ✅ |
 
 C-Bus levels (0–255) map directly to Home Assistant brightness (0–255).
 
+### Initial state
+
+Because there is no level database to poll, a group's state is **unknown until
+the first event** (any change on the bus, or a command from Home Assistant).
+After that, MONITOR mode keeps it accurate. (Optional level status-requests on
+startup are on the roadmap.)
+
 ## Troubleshooting
 
-- **`cannot_connect` during setup** — verify the host/ports and that your HA IP
-  is allowed in C-Gate `access.txt`.
-- **State not updating from wall switches** — confirm the **status-change port
-  (20025)** is enabled and reachable; this stream is what provides live feedback.
+- **`cannot_connect` during setup** — check the IP/port, and make sure nothing
+  else holds the CNI's single connection (Toolkit, C-Gate, another controller).
+- **`*** Connection already in use`** — another client owns the CNI. Disconnect
+  it; if it persists, power-cycle the CNI to clear a stale session.
+- **No state at all / commands do nothing** — check the CNI status page
+  (`http://<cni-ip>/`). If it shows **C-Bus status: Power down** or unknown
+  voltage, the C-Bus network itself is unpowered — fix the C-Bus power supply.
 - Enable debug logging:
 
   ```yaml
   logger:
     logs:
       custom_components.cbus: debug
+      cbus: debug
   ```
+
+## Development
+
+`python3 tests/test_encoding.py` checks the exact on-wire bytes for lighting
+commands (no hardware needed).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) for this integration. The vendored `cbus` protocol library under
+`custom_components/cbus/vendor/` is **LGPL-3.0-or-later** — see its `NOTICE.md`.

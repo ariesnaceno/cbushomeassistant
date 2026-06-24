@@ -1,8 +1,8 @@
-"""Switch platform for the C-Bus (C-Gate) integration.
+"""Switch platform for the C-Bus (direct CNI) integration.
 
 Use this for non-dimmable C-Bus lighting groups driven by relay output units
 (e.g. fans, exhausts, pumps, or any on/off load). Like the light platform, it
-reflects real-time status changes pushed by C-Gate, so the switch state always
+reflects real-time MONITOR-mode events from the CNI, so the switch state always
 matches the bus.
 """
 
@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .cgate import CGateClient
+from .pci import PCIClient
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up C-Bus switches from a config entry."""
-    client: CGateClient = hass.data[DOMAIN][entry.entry_id]
+    client: PCIClient = hass.data[DOMAIN][entry.entry_id]
     groups: dict[str, str] = entry.options.get(CONF_SWITCH_GROUPS, {})
 
     entities = [
@@ -49,7 +49,7 @@ class CBusSwitch(SwitchEntity):
 
     def __init__(
         self,
-        client: CGateClient,
+        client: PCIClient,
         entry: ConfigEntry,
         group: int,
         name: str,
@@ -63,9 +63,9 @@ class CBusSwitch(SwitchEntity):
         self._unsub_conn = None
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"C-Bus ({client.project})",
+            name=f"C-Bus ({client.name})",
             manufacturer="Clipsal",
-            model="C-Bus via C-Gate",
+            model="C-Bus via CNI",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -92,7 +92,7 @@ class CBusSwitch(SwitchEntity):
 
     @property
     def available(self) -> bool:
-        """Return True only while C-Gate is connected."""
+        """Return True only while the CNI link is up."""
         return self._client.connected
 
     @property

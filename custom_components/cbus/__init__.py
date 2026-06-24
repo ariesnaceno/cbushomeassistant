@@ -1,4 +1,4 @@
-"""The C-Bus (C-Gate) integration for Home Assistant."""
+"""The C-Bus (direct CNI/PCI) integration for Home Assistant."""
 
 from __future__ import annotations
 
@@ -7,37 +7,22 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
-from .cgate import CGateClient, CGateError
-from .const import (
-    CONF_COMMAND_PORT,
-    CONF_NETWORK,
-    CONF_PROJECT,
-    CONF_STATUS_PORT,
-    DOMAIN,
-    PLATFORMS,
-)
+from .const import CONF_PORT, DOMAIN, PLATFORMS
+from .pci import PCIClient
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up C-Bus from a config entry."""
-    client = CGateClient(
-        host=entry.data[CONF_HOST],
-        command_port=entry.data[CONF_COMMAND_PORT],
-        status_port=entry.data[CONF_STATUS_PORT],
-        project=entry.data[CONF_PROJECT],
-        network=entry.data[CONF_NETWORK],
-    )
+    client = PCIClient(host=entry.data[CONF_HOST], port=entry.data[CONF_PORT])
 
     try:
         await client.async_start()
-    except CGateError as err:
-        _LOGGER.error("Failed to connect to C-Gate: %s", err)
-        from homeassistant.exceptions import ConfigEntryNotReady
-
-        raise ConfigEntryNotReady(str(err)) from err
+    except OSError as err:
+        raise ConfigEntryNotReady(f"Cannot reach CNI: {err}") from err
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = client
 
@@ -51,7 +36,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        client: CGateClient = hass.data[DOMAIN].pop(entry.entry_id)
+        client: PCIClient = hass.data[DOMAIN].pop(entry.entry_id)
         await client.async_stop()
     return unload_ok
 
