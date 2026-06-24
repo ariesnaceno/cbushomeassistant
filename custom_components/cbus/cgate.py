@@ -43,6 +43,17 @@ _GET_LEVEL_RE = re.compile(
 )
 
 
+def _child_text(element, name: str) -> str | None:
+    """Return the text of the first direct child whose tag ends with ``name``.
+
+    Tolerant of XML namespaces (matches on the local tag name).
+    """
+    for child in element:
+        if child.tag.endswith(name) and child.text is not None:
+            return child.text.strip()
+    return None
+
+
 class CGateError(Exception):
     """Raised when a C-Gate command fails or the server is unreachable."""
 
@@ -252,6 +263,134 @@ class CGateClient:
             if code.isdigit() and code.startswith(("4", "5")):
                 raise CGateError(f"C-Gate error: {text}")
             return [text]
+
+    async def _command_multiline(self, command: str) -> list[str]:
+        """Send a command that returns a multi-line C-Gate response.
+
+        C-Gate marks continuation lines with ``NNN-...`` (dash after the
+        3-digit status code) and the final line with ``NNN ...`` (space).
+        Returns the payload of every line with the status code stripped.
+        """
+        async with self._cmd_lock:
+            if self._cmd_writer is None or self._cmd_reader is None:
+                await self._connect_command()
+            assert self._cmd_writer is not None and self._cmd_reader is not None
+
+            _LOGGER.debug("C-Gate >> %s", command)
+            try:
+                self._cmd_writer.write((command + "\r\n").encode("latin-1"))
+                await self._cmd_writer.drain()
+            except OSError as err:
+                await self._close_command()
+                raise CGateError(f"C-Gate command failed: {err}") from err
+
+            lines: list[str] = []
+            while True:
+                try:
+                    raw = await asyncio.wait_for(
+                        self._cmd_reader.readline(), timeout=_REPLY_TIMEOUT
+                    )
+                except (OSError, asyncio.TimeoutError) as err:
+                    await self._close_command()
+                    raise CGateError(f"C-Gate command failed: {err}") from err
+                if not raw:
+                    await self._close_command()
+                    raise CGateError("C-Gate closed the connection")
+
+                text = raw.decode("latin-1", errors="replace").rstrip("\r\n")
+                code = text[:3]
+                sep = text[3:4]
+                payload = text[4:] if (code.isdigit() and sep in "- ") else text
+                if code.isdigit() and code.startswith(("4", "5")):
+                    raise CGateError(f"C-Gate error: {text}")
+                lines.append(payload)
+                # A space (not a dash) after the status code marks the last line.
+                if not (code.isdigit() and sep == "-"):
+                    break
+            _LOGGER.debug("C-Gate << %d line(s)", len(lines))
+            return lines
+
+    async def async_discover_lighting_groups(self) -> dict[int, str]:
+        """Discover lighting groups defined in the C-Bus Toolkit project.
+
+        Reads the C-Gate project database (the same DB that C-Bus Toolkit
+        wrote) and returns ``{group_id: tag_name}`` for every group on the
+        lighting application of the configured network. Falls back to the
+        live network tree if the XML database is unavailable.
+        """
+        groups = await self._discover_from_xml()
+        if groups:
+            return groups
+        return await self._discover_from_tree()
+
+    async def _discover_from_xml(self) -> dict[int, str]:
+        """Parse ``dbgetxml`` output for lighting-group tag names."""
+        try:
+            lines = await self._command_multiline(f"dbgetxml //{self._project}")
+        except CGateError as err:
+            _LOGGER.debug("dbgetxml discovery failed: %s", err)
+            return {}
+
+        xml = "\n".join(lines)
+        groups: dict[int, str] = {}
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(xml)  # noqa: S314 - trusted local C-Gate data
+        except Exception as err:  # noqa: BLE001 - tolerate any malformed XML
+            _LOGGER.debug("Could not parse C-Gate project XML: %s", err)
+            return self._scrape_groups_from_text(xml)
+
+        # Walk every Application node; keep those addressed to lighting (56).
+        for app in root.iter():
+            if not app.tag.endswith("Application"):
+                continue
+            app_addr = _child_text(app, "Address")
+            if app_addr is None or int(app_addr) != LIGHTING_APPLICATION:
+                continue
+            for grp in app.iter():
+                if not grp.tag.endswith("Group"):
+                    continue
+                addr = _child_text(grp, "Address")
+                tag = _child_text(grp, "TagName") or _child_text(grp, "Tag")
+                if addr is not None and addr.isdigit():
+                    gid = int(addr)
+                    groups[gid] = (tag or f"C-Bus Group {gid}").strip()
+        return groups
+
+    @staticmethod
+    def _scrape_groups_from_text(xml: str) -> dict[int, str]:
+        """Best-effort regex fallback when the XML can't be tree-parsed."""
+        groups: dict[int, str] = {}
+        block_re = re.compile(
+            r"<Group>.*?<Address>(\d+)</Address>.*?"
+            r"<TagName>(.*?)</TagName>.*?</Group>",
+            re.IGNORECASE | re.DOTALL,
+        )
+        for addr, tag in block_re.findall(xml):
+            groups[int(addr)] = (tag or f"C-Bus Group {addr}").strip()
+        return groups
+
+    async def _discover_from_tree(self) -> dict[int, str]:
+        """Fallback: enumerate groups seen on the live network tree."""
+        try:
+            lines = await self._command_multiline(
+                f"tree //{self._project}/{self._network}"
+            )
+        except CGateError as err:
+            _LOGGER.debug("tree discovery failed: %s", err)
+            return {}
+
+        groups: dict[int, str] = {}
+        for line in lines:
+            match = _PATH_RE.search(line)
+            if not match:
+                continue
+            if int(match.group("app")) != LIGHTING_APPLICATION:
+                continue
+            gid = int(match.group("group"))
+            groups.setdefault(gid, f"C-Bus Group {gid}")
+        return groups
 
     # ------------------------------------------------------------------
     # Status-change channel (real-time, push)

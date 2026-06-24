@@ -75,6 +75,11 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        """Hold connection data between the connect and confirm steps."""
+        self._conn: dict[str, Any] = {}
+        self._discovered: dict[int, str] = {}
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -90,28 +95,28 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                 network=user_input[CONF_NETWORK],
             )
             try:
-                # Validate by opening (and closing) the command connection.
+                # Validate by opening the command connection, then auto-detect
+                # the lighting groups defined in the C-Bus Toolkit project.
                 await client._connect_command()  # noqa: SLF001
-                await client._close_command()  # noqa: SLF001
+                self._discovered = await client.async_discover_lighting_groups()
             except CGateError:
                 errors["base"] = "cannot_connect"
-            else:
+            finally:
+                await client._close_command()  # noqa: SLF001
+
+            if not errors:
                 await self.async_set_unique_id(
                     f"{user_input[CONF_HOST]}-{user_input[CONF_PROJECT]}"
                 )
                 self._abort_if_unique_id_configured()
-
-                return self.async_create_entry(
-                    title=f"C-Bus ({user_input[CONF_PROJECT]})",
-                    data={
-                        CONF_HOST: user_input[CONF_HOST],
-                        CONF_COMMAND_PORT: user_input[CONF_COMMAND_PORT],
-                        CONF_STATUS_PORT: user_input[CONF_STATUS_PORT],
-                        CONF_PROJECT: user_input[CONF_PROJECT],
-                        CONF_NETWORK: user_input[CONF_NETWORK],
-                    },
-                    options=_build_options(user_input),
-                )
+                self._conn = {
+                    CONF_HOST: user_input[CONF_HOST],
+                    CONF_COMMAND_PORT: user_input[CONF_COMMAND_PORT],
+                    CONF_STATUS_PORT: user_input[CONF_STATUS_PORT],
+                    CONF_PROJECT: user_input[CONF_PROJECT],
+                    CONF_NETWORK: user_input[CONF_NETWORK],
+                }
+                return await self.async_step_groups()
 
         schema = vol.Schema(
             {
@@ -122,13 +127,43 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_COMMAND_PORT, default=DEFAULT_COMMAND_PORT
                 ): int,
                 vol.Required(CONF_STATUS_PORT, default=DEFAULT_STATUS_PORT): int,
-                vol.Optional(CONF_GROUPS, default=""): str,
-                vol.Optional(CONF_SWITCH_GROUPS, default=""): str,
-                vol.Optional(CONF_COVER_GROUPS, default=""): str,
             }
         )
         return self.async_show_form(
             step_id="user", data_schema=schema, errors=errors
+        )
+
+    async def async_step_groups(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Confirm/edit the auto-detected groups and assign platform types.
+
+        The lights box is pre-filled with everything discovered from the
+        C-Bus Toolkit project. The user can trim it and move any entries into
+        the switch or cover boxes before finishing.
+        """
+        if user_input is not None:
+            return self.async_create_entry(
+                title=f"C-Bus ({self._conn[CONF_PROJECT]})",
+                data=self._conn,
+                options=_build_options(user_input),
+            )
+
+        prefilled = "\n".join(
+            f"{gid}:{name}" for gid, name in sorted(self._discovered.items())
+        )
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_GROUPS, default=prefilled): str,
+                vol.Optional(CONF_SWITCH_GROUPS, default=""): str,
+                vol.Optional(CONF_COVER_GROUPS, default=""): str,
+            }
+        )
+        count = len(self._discovered)
+        return self.async_show_form(
+            step_id="groups",
+            data_schema=schema,
+            description_placeholders={"count": str(count)},
         )
 
     @staticmethod
