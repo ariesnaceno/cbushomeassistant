@@ -32,6 +32,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # Stored in entry.options: newline/comma separated "group:Friendly Name" lines.
 CONF_GROUPS = "groups"
+CONF_SWITCH_GROUPS = "switch_groups"
+CONF_COVER_GROUPS = "cover_groups"
 
 
 def _parse_groups(raw: str) -> dict[int, str]:
@@ -49,6 +51,23 @@ def _parse_groups(raw: str) -> dict[int, str]:
         if number.isdigit():
             groups[int(number)] = name.strip()
     return groups
+
+
+def _build_options(user_input: dict[str, Any]) -> dict[str, Any]:
+    """Build the options dict (per-platform group maps) from user input."""
+    return {
+        CONF_GROUPS: {
+            str(k): v for k, v in _parse_groups(user_input.get(CONF_GROUPS, "")).items()
+        },
+        CONF_SWITCH_GROUPS: {
+            str(k): v
+            for k, v in _parse_groups(user_input.get(CONF_SWITCH_GROUPS, "")).items()
+        },
+        CONF_COVER_GROUPS: {
+            str(k): v
+            for k, v in _parse_groups(user_input.get(CONF_COVER_GROUPS, "")).items()
+        },
+    }
 
 
 class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -82,7 +101,6 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
                 self._abort_if_unique_id_configured()
 
-                groups = _parse_groups(user_input.get(CONF_GROUPS, ""))
                 return self.async_create_entry(
                     title=f"C-Bus ({user_input[CONF_PROJECT]})",
                     data={
@@ -92,9 +110,7 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PROJECT: user_input[CONF_PROJECT],
                         CONF_NETWORK: user_input[CONF_NETWORK],
                     },
-                    options={
-                        CONF_GROUPS: {str(k): v for k, v in groups.items()},
-                    },
+                    options=_build_options(user_input),
                 )
 
         schema = vol.Schema(
@@ -107,6 +123,8 @@ class CBusConfigFlow(ConfigFlow, domain=DOMAIN):
                 ): int,
                 vol.Required(CONF_STATUS_PORT, default=DEFAULT_STATUS_PORT): int,
                 vol.Optional(CONF_GROUPS, default=""): str,
+                vol.Optional(CONF_SWITCH_GROUPS, default=""): str,
+                vol.Optional(CONF_COVER_GROUPS, default=""): str,
             }
         )
         return self.async_show_form(
@@ -132,15 +150,22 @@ class CBusOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """Edit the group list."""
         if user_input is not None:
-            groups = _parse_groups(user_input.get(CONF_GROUPS, ""))
-            return self.async_create_entry(
-                title="",
-                data={CONF_GROUPS: {str(k): v for k, v in groups.items()}},
+            return self.async_create_entry(title="", data=_build_options(user_input))
+
+        def _as_text(key: str) -> str:
+            return "\n".join(
+                f"{k}:{v}" for k, v in self._entry.options.get(key, {}).items()
             )
 
-        current = self._entry.options.get(CONF_GROUPS, {})
-        as_text = "\n".join(f"{k}:{v}" for k, v in current.items())
         schema = vol.Schema(
-            {vol.Optional(CONF_GROUPS, default=as_text): str}
+            {
+                vol.Optional(CONF_GROUPS, default=_as_text(CONF_GROUPS)): str,
+                vol.Optional(
+                    CONF_SWITCH_GROUPS, default=_as_text(CONF_SWITCH_GROUPS)
+                ): str,
+                vol.Optional(
+                    CONF_COVER_GROUPS, default=_as_text(CONF_COVER_GROUPS)
+                ): str,
+            }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

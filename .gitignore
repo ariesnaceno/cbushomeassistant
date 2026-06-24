@@ -6,3 +6,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+.github/
+validate.yml.txt

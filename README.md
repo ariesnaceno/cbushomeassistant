@@ -56,23 +56,31 @@ directory and restart Home Assistant.
    - **Project name** (exactly as loaded in C-Gate, e.g. `HOME`).
    - **Network number** (usually `254`).
    - **Command port** (`20023`) and **Status-change port** (`20025`).
-   - **Light groups** — one per line as `group:Friendly Name`, e.g.
+   - **Light groups** — dimmable lighting, one per line as `group:Friendly Name`.
+   - **Switch groups** — non-dimmable relay loads (fans, pumps, exhausts).
+   - **Cover groups** — blinds/shutters driven via the lighting application.
 
      ```
+     # Lights
      1:Living Room
      4:Kitchen
-     20:Hallway
+     # Switches
+     12:Exhaust Fan
+     # Covers
+     30:Living Room Blind
      ```
 
-You can edit the group list later via the integration's **Configure** button.
+You can edit any of the group lists later via the integration's **Configure**
+button.
 
 ## Features
 
 | Feature | Supported |
 |--------|-----------|
-| On / Off | ✅ |
-| Dimming (brightness 0–255) | ✅ |
-| Transition / ramp time | ✅ |
+| Lights: on/off + dimming (0–255) | ✅ |
+| Lights/covers: transition / ramp time | ✅ |
+| Switches (relay on/off groups) | ✅ |
+| Covers (blinds/shutters with position) | ✅ |
 | Real-time feedback from physical switches | ✅ |
 | Auto-reconnect & state re-sync | ✅ |
 | Multiple C-Gate projects / entries | ✅ |

@@ -10,7 +10,9 @@
           "network": "C-Bus network number",
           "command_port": "Command port",
           "status_port": "Status-change port",
-          "groups": "Light groups (one per line, e.g. 4:Kitchen)"
+          "groups": "Light groups (one per line, e.g. 4:Kitchen)",
+          "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
+          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
         }
       }
     },
@@ -26,7 +28,9 @@
       "init": {
         "title": "Edit C-Bus light groups",
         "data": {
-          "groups": "Light groups (one per line, e.g. 4:Kitchen)"
+          "groups": "Light groups (one per line, e.g. 4:Kitchen)",
+          "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
+          "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
         }
       }
     }

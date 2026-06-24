@@ -30,4 +30,4 @@ SIGNAL_GROUP_UPDATE = f"{DOMAIN}_group_update"
 # Dispatcher signal: fired when connection state changes.
 SIGNAL_CONNECTION_UPDATE = f"{DOMAIN}_connection_update"
 
-PLATFORMS = ["light"]
+PLATFORMS = ["light", "switch", "cover"]
