@@ -19,6 +19,7 @@ import asyncio
 import logging
 import os
 import socket
+import struct
 import sys
 from collections.abc import Callable
 
@@ -62,6 +63,30 @@ def _enable_tcp_keepalive(transport) -> None:
                 sock.setsockopt(socket.IPPROTO_TCP, opt, value)
     except OSError as err:
         _LOGGER.debug("Could not set TCP keep-alive: %s", err)
+
+
+def _abort_transport(transport) -> None:
+    """Close a transport with a TCP RST so the CNI frees its session at once.
+
+    A normal close (FIN) can leave the CNI holding the old session as a zombie,
+    which then rejects the next connection with "already in use" — the reason a
+    CNI power-cycle was previously needed after a Home Assistant restart. Setting
+    SO_LINGER to 0 makes close() send a RST, which the CNI acts on immediately.
+    """
+    if transport is None:
+        return
+    sock = transport.get_extra_info("socket")
+    if sock is not None:
+        try:
+            sock.setsockopt(
+                socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0)
+            )
+        except OSError as err:
+            _LOGGER.debug("Could not set SO_LINGER: %s", err)
+    try:
+        transport.close()
+    except OSError:
+        pass
 
 
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
@@ -115,6 +140,7 @@ class PCIClient:
         self._host = host
         self._port = port
         self._protocol: _HAProtocol | None = None
+        self._transport = None
         self._connect_task: asyncio.Task | None = None
         self._closing = False
         self._connected = False
@@ -247,6 +273,7 @@ class PCIClient:
                 continue
 
             self._protocol = protocol  # type: ignore[assignment]
+            self._transport = _transport
             _enable_tcp_keepalive(_transport)
 
             # The TCP connection succeeds even when the CNI is going to reject
@@ -295,6 +322,7 @@ class PCIClient:
             finally:
                 self._set_connected(False)
                 self._protocol = None
+                self._transport = None
 
             if self._closing:
                 break
@@ -314,14 +342,13 @@ class PCIClient:
             _LOGGER.debug(message, reason, delay, self._fail_count)
 
     def _teardown_protocol(self) -> None:
-        """Best-effort close of the transport."""
-        proto = self._protocol
+        """Abortively close the transport (RST) so the CNI frees its session."""
+        transport = self._transport
+        if transport is None and self._protocol is not None:
+            transport = self._protocol._transport  # noqa: SLF001
         self._protocol = None
-        if proto is not None and proto._transport is not None:  # noqa: SLF001
-            try:
-                proto._transport.close()  # noqa: SLF001
-            except OSError:
-                pass
+        self._transport = None
+        _abort_transport(transport)
 
     def _require_protocol(self) -> _HAProtocol:
         """Return the live protocol or raise if not connected."""

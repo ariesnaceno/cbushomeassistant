@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -30,6 +30,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
+    # Close the CNI connection cleanly when Home Assistant shuts down or
+    # restarts. A config entry is not always unloaded on restart, so without
+    # this the socket would be abandoned and the CNI would hold the old session
+    # as a zombie — forcing a CNI power-cycle before HA could reconnect. The
+    # abortive close (see pci.py) makes the CNI release the session immediately.
+    async def _async_on_ha_stop(_event: Event) -> None:
+        await client.async_stop()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_on_ha_stop)
+    )
     return True
 
 
