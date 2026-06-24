@@ -168,6 +168,27 @@ the first event** (any change on the bus, or a command from Home Assistant).
 After that, MONITOR mode keeps it accurate. (Optional level status-requests on
 startup are on the roadmap.)
 
+## Avoiding a CNI power-cycle on Home Assistant restart
+
+Some CNIs (e.g. CNI2 firmware 5.5.00) accept only one connection **and do not
+release it when the client disconnects**. So after a Home Assistant restart the
+CNI rejects the new connection with `*** Connection already in use` until it is
+power-cycled.
+
+To avoid that, install the bundled **C-Bus CNI Relay** add-on, which keeps one
+permanent connection to the CNI and lets Home Assistant connect/disconnect to
+*it* freely — so HA can restart without ever needing a CNI power-cycle:
+
+1. **Settings → Add-ons → Add-on Store → ⋮ → Repositories**, add
+   `https://github.com/ariesnaceno/cbushomeassistant`.
+2. Install **C-Bus CNI Relay**, set **cni_host** to your CNI's IP, start it
+   (enable *Start on boot* + *Watchdog*).
+3. In the **Clipsal C-Bus (CNI)** integration, set **Host** to your Home
+   Assistant host IP and **Port** to `10010` — i.e. point it at the relay.
+
+See [`cbus_relay/DOCS.md`](cbus_relay/DOCS.md) for details. (Only the relay should
+talk to the CNI — nothing else.)
+
 ## Using C-Bus Toolkit alongside
 
 A CNI accepts **only one** connection at a time, so Home Assistant and C-Bus
