@@ -21,14 +21,23 @@
           "switch_groups": "Switch groups (relay/on-off, e.g. 12:Exhaust Fan)",
           "cover_groups": "Cover groups (blinds/shutters, e.g. 30:Living Blind)"
         }
+      },
+      "reconfigure": {
+        "title": "Change connection",
+        "description": "Update the host/port. To use the C-Bus CNI Relay add-on, set Host to your Home Assistant host IP and Port to 10010.",
+        "data": {
+          "host": "Host / IP address",
+          "port": "TCP port"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Could not connect to the CNI. Check the IP/port, and that nothing else holds the CNI's single connection.",
+      "cannot_connect": "Could not connect. Check the IP/port, and that nothing else holds the CNI's single connection.",
       "invalid_project_file": "Could not read the Toolkit project file at that path. Check the path and that it is a .cbz or .xml file."
     },
     "abort": {
-      "already_configured": "This CNI is already configured."
+      "already_configured": "This CNI is already configured.",
+      "reconfigure_successful": "Connection updated."
     }
   },
   "options": {
