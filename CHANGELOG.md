@@ -7,6 +7,16 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.2.0
+- **Survive a full host reboot without a CNI power-cycle.** After a host reboot
+  the CNI can still hold the pre-reboot session as a zombie and reject the new
+  connection with `*** Connection already in use`. The integration now
+  reconnects from a **fixed local source port**, so the new SYN reuses the CNI's
+  existing connection 4-tuple and prompts it to drop the stale session — then
+  the next attempt connects cleanly. Best-effort: it falls back to an ephemeral
+  port if the fixed one can't be bound. (Pair with the relay add-on ≥1.1.0 if
+  you connect through the relay.)
+
 ### 2.1.0
 - **Availability debounce.** A brief connection blip no longer flickers every
   group to *unavailable* and back. Entities only go unavailable if the link
@@ -47,6 +57,16 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## C-Bus CNI Relay add-on
 
+### 1.1.0
+- **Recover from a host reboot automatically.** When the host reboots, the relay
+  restarts and the CNI may still hold its old session as a zombie, rejecting the
+  fresh connection with `*** Connection already in use` — previously the one case
+  that still needed a CNI power-cycle. The relay now reconnects from a **fixed
+  local source port** (`cni_local_port`, default `10011`) so the CNI drops the
+  stale session, and it **detects the "already in use" banner** during a short
+  handshake so it never serves Home Assistant a dead link, retrying until the
+  session clears.
+
 ### 1.0.1
 - **Re-initialise Home Assistant after a CNI-side drop.** The relay now only
   serves HA while the CNI link is up, and drops the HA connection whenever the
@@ -71,6 +91,8 @@ until it is power-cycled. The relay holds one permanent connection to the CNI, s
 HA can come and go without ever disturbing it. This is the recommended setup for
 such CNIs.
 
-> The only time a CNI restart is still needed is when the **relay itself**
-> restarts (an add-on update, a crash, or a host reboot) — far rarer than HA
-> restarts.
+> A **relay** restart (add-on update, crash, or host reboot) used to be the one
+> case that still needed a CNI power-cycle. As of relay 1.1.0 the relay recovers
+> from that on its own by reconnecting from a fixed local source port, which
+> prompts the CNI to drop its stale session. A power-cycle is only a last resort
+> for unusually stubborn firmware.

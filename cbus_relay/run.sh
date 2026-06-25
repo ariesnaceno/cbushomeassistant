@@ -5,6 +5,7 @@ set -e
 export CNI_HOST="$(bashio::config 'cni_host')"
 export CNI_PORT="$(bashio::config 'cni_port')"
 export LISTEN_PORT="$(bashio::config 'listen_port')"
+export CNI_LOCAL_PORT="$(bashio::config 'cni_local_port')"
 export LISTEN_HOST="0.0.0.0"
 
 if [ -z "${CNI_HOST}" ]; then

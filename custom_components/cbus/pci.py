@@ -95,6 +95,52 @@ def _abort_transport(transport) -> None:
         pass
 
 
+# Fixed local (source) port for the CNI connection. Reconnecting from the same
+# source port means that after an *unclean* drop — e.g. a full Home Assistant
+# host reboot, where the OS never sent a FIN/RST — our new SYN arrives on the
+# CNI's existing 4-tuple. A conformant TCP stack answers that SYN with a
+# challenge ACK (RFC 5961), which makes us send a RST that tears down the CNI's
+# stale session, so the next attempt connects cleanly instead of being rejected
+# with "*** Connection already in use" (which otherwise needs a CNI power-cycle).
+# Best-effort: if the port can't be bound we fall back to an ephemeral one.
+_SOURCE_PORT = 10002
+
+
+async def _connect_from_source_port(host: str, port: int):
+    """Open a TCP connection to the CNI from a fixed local source port.
+
+    See ``_SOURCE_PORT`` for why pinning the source port lets us recover from
+    an unclean drop (host reboot) without a CNI power-cycle. This is best
+    effort: if the address can't be resolved or the port can't be bound
+    (already in use locally, e.g. a stale ``TIME_WAIT`` despite SO_REUSEADDR),
+    it returns ``None`` so the caller falls back to an ephemeral-port connect.
+    """
+    if not _SOURCE_PORT:
+        return None
+    loop = asyncio.get_running_loop()
+    try:
+        infos = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as err:
+        _LOGGER.debug("getaddrinfo(%s) failed: %s", host, err)
+        return None
+    family, type_, proto, _canon, addr = infos[0]
+    sock = socket.socket(family, type_, proto)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", _SOURCE_PORT))
+        sock.setblocking(False)
+        await loop.sock_connect(sock, addr)
+    except OSError as err:
+        sock.close()
+        _LOGGER.debug(
+            "Could not connect from source port %s (%s); using an ephemeral port",
+            _SOURCE_PORT,
+            err,
+        )
+        return None
+    return sock
+
+
 _RECONNECT_DELAY = 5.0  # seconds between reconnection attempts
 _IN_USE_DELAY = 30.0  # longer back-off when the CNI is held by another client
 # How long a new connection must stay up before we treat it as genuinely
@@ -278,17 +324,28 @@ class PCIClient:
         while not self._closing:
             lost_future: asyncio.Future = loop.create_future()
             self._in_use = False
-            try:
-                _transport, protocol = await loop.create_connection(
-                    lambda: _HAProtocol(
-                        self,
-                        timesync_frequency=0,  # don't drive the bus clock
-                        handle_clock_requests=False,
-                        connection_lost_future=lost_future,
-                    ),
-                    self._host,
-                    self._port,
+
+            def _make_protocol() -> _HAProtocol:
+                return _HAProtocol(
+                    self,
+                    timesync_frequency=0,  # don't drive the bus clock
+                    handle_clock_requests=False,
+                    connection_lost_future=lost_future,
                 )
+
+            try:
+                # Prefer a fixed source port so an unclean drop (host reboot)
+                # self-heals without a CNI power-cycle; fall back to a normal
+                # ephemeral connect if the port can't be bound.
+                sock = await _connect_from_source_port(self._host, self._port)
+                if sock is not None:
+                    _transport, protocol = await loop.create_connection(
+                        _make_protocol, sock=sock
+                    )
+                else:
+                    _transport, protocol = await loop.create_connection(
+                        _make_protocol, self._host, self._port
+                    )
             except OSError as err:
                 self._log_retry(f"cannot reach CNI ({err})", _RECONNECT_DELAY)
                 await asyncio.sleep(_RECONNECT_DELAY)

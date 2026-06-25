@@ -25,6 +25,9 @@ relay instead of the CNI directly.
    - **cni_host** — your CNI's IP address (e.g. `192.168.101.200`)
    - **cni_port** — CNI port (default `10001`)
    - **listen_port** — port HA will connect to (default `10010`)
+   - **cni_local_port** — fixed local source port for the CNI link (default
+     `10011`; leave as-is unless it clashes with something — set `0` to disable
+     and use a random port). See *Surviving a host reboot* below.
 2. **Start** the add-on (and enable *Start on boot* + *Watchdog*).
 3. In **Settings → Devices & Services → Clipsal C-Bus (CNI)**, set the
    integration's **Host** to your **Home Assistant host IP** (the machine running
@@ -37,10 +40,29 @@ relay instead of the CNI directly.
 > integration pointed directly at the CNI, another controller) is connected to
 > the CNI — only this relay should talk to it.
 
+## Surviving a host reboot
+
+The relay keeps the CNI link up across HA **Core** restarts. A full **host**
+reboot is different: the relay itself restarts, and its previous CNI connection
+was never closed cleanly — so the CNI keeps that session as a zombie and rejects
+the relay's fresh connection with `*** Connection already in use`. This used to
+be the one case that still needed a manual CNI power-cycle.
+
+The relay now recovers on its own:
+
+- It reconnects to the CNI from a **fixed local source port** (`cni_local_port`,
+  default `10011`). The new connection therefore reuses the same source IP/port,
+  so it lands on the CNI's existing connection and prompts the CNI to reset the
+  stale session — after which the relay connects cleanly. No power-cycle.
+- It detects the `*** Connection already in use` banner during a brief handshake,
+  so it never serves Home Assistant a dead link, and keeps retrying patiently
+  until the session clears.
+
+If your CNI's firmware is unusually stubborn and still won't release the session,
+a power-cycle remains the last resort — but for common firmware this is now
+automatic.
+
 ## Notes
 
-- The relay keeps the CNI link up across HA restarts. The only time the CNI could
-  still need a power-cycle is if the **relay itself** restarts (add-on update or
-  HA host reboot) — far rarer than HA Core restarts.
 - TCP keep-alive is enabled on the CNI link so a dead/half-open link is detected
   and re-established automatically.
