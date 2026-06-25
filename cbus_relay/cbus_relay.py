@@ -17,6 +17,14 @@ so the CNI never sees a disconnect and never zombies. No power-cycle needed.
 It is a transparent byte pipe — it does not parse the C-Bus protocol — so the
 Home Assistant integration keeps doing all the protocol work end to end.
 
+Reliability (v1.0.1)
+--------------------
+The relay only serves Home Assistant while the CNI link is actually up, and it
+drops the HA connection whenever the CNI link drops. This forces HA to
+reconnect and re-run its init sequence (SMART+MONITOR), so monitoring always
+comes back cleanly after a CNI-side blip — instead of HA silently talking to a
+freshly-reconnected, un-initialised CNI.
+
 Configuration (environment variables)
 -------------------------------------
 - ``CNI_HOST``      CNI IP address (required, e.g. 192.168.101.200)
@@ -31,7 +39,6 @@ import asyncio
 import logging
 import os
 import socket
-import struct
 
 _LOG = logging.getLogger("cbus_relay")
 
@@ -67,6 +74,10 @@ class Relay:
         self._up_writer: asyncio.StreamWriter | None = None
         self._down_writer: asyncio.StreamWriter | None = None
 
+    @property
+    def _upstream_ready(self) -> bool:
+        return self._up_writer is not None and not self._up_writer.is_closing()
+
     async def run(self) -> None:
         """Start the upstream manager and the downstream server."""
         asyncio.ensure_future(self._upstream_manager())
@@ -79,6 +90,14 @@ class Relay:
         )
         async with server:
             await server.serve_forever()
+
+    def _close_downstream(self, reason: str) -> None:
+        """Drop the current HA connection so it reconnects and re-initialises."""
+        down = self._down_writer
+        self._down_writer = None
+        if down is not None and not down.is_closing():
+            _LOG.info("Dropping Home Assistant connection (%s)", reason)
+            down.close()
 
     # ------------------------------------------------------------------
     # Upstream: one permanent connection to the CNI
@@ -115,6 +134,9 @@ class Relay:
             finally:
                 self._up_writer = None
                 writer.close()
+                # The CNI link is gone — force HA to reconnect so it re-inits
+                # against a fresh CNI session once we're back up.
+                self._close_downstream("CNI link dropped")
                 _LOG.warning(
                     "CNI link dropped; reconnecting in %ss", _UPSTREAM_RECONNECT
                 )
@@ -127,6 +149,18 @@ class Relay:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         peer = writer.get_extra_info("peername")
+
+        # Only serve HA when the CNI link is actually up. Otherwise close
+        # immediately so HA keeps retrying until the CNI is reachable (and then
+        # connects fresh and runs its init sequence).
+        if not self._upstream_ready:
+            _LOG.info(
+                "Home Assistant %s connected but CNI link not ready; "
+                "closing so it retries", peer,
+            )
+            writer.close()
+            return
+
         # The CNI is single-client; if HA reconnects, drop the previous client.
         old = self._down_writer
         if old is not None and not old.is_closing():
