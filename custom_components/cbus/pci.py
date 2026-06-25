@@ -101,6 +101,11 @@ _IN_USE_DELAY = 30.0  # longer back-off when the CNI is held by another client
 # connected. The CNI rejects extra clients (and closes) within ~1s, so this
 # distinguishes a real session from an "already in use" rejection.
 _HANDSHAKE_GRACE = 3.0
+# Keep entities "available" across a brief reconnect (e.g. a momentary network
+# blip to the relay). Only after the link stays down this long do we mark the
+# entities unavailable — this avoids spurious "offline" flicker and the history
+# noise of every group flapping unavailable->available on a transient drop.
+_OFFLINE_GRACE = 25.0
 # A CNI allows only one TCP client; it rejects extras with this banner.
 _IN_USE_MARKER = b"already in use"
 
@@ -152,6 +157,7 @@ class PCIClient:
         self._connected = False
         self._in_use = False  # set when the CNI rejects us as already-in-use
         self._fail_count = 0  # consecutive connect failures (for log throttling)
+        self._offline_handle = None  # delayed "go unavailable" timer
 
         # group id -> last known level (0..255). Absent = unknown.
         self._levels: dict[int, int] = {}
@@ -220,6 +226,9 @@ class PCIClient:
         (leaving the CNI holding a zombie session).
         """
         self._closing = True
+        if self._offline_handle is not None:
+            self._offline_handle.cancel()
+            self._offline_handle = None
         transport, self._transport, self._protocol = self._transport, None, None
         _abort_transport(transport)
         if self._connect_task:
@@ -320,7 +329,7 @@ class PCIClient:
                     await asyncio.sleep(_RECONNECT_DELAY)
                 continue
 
-            self._set_connected(True)
+            self._mark_link_up()
             self._fail_count = 0
             _LOGGER.info(
                 "Connected to C-Bus CNI %s:%s (SMART+MONITOR mode)",
@@ -333,7 +342,7 @@ class PCIClient:
             except asyncio.CancelledError:
                 raise
             finally:
-                self._set_connected(False)
+                self._mark_link_down()
                 self._protocol = None
                 self._transport = None
 
@@ -376,6 +385,31 @@ class PCIClient:
     def _note_in_use(self) -> None:
         """Flag that the CNI rejected this connection as already in use."""
         self._in_use = True
+
+    def _mark_link_up(self) -> None:
+        """Link is up: cancel any pending offline timer and report available."""
+        if self._offline_handle is not None:
+            self._offline_handle.cancel()
+            self._offline_handle = None
+        self._set_connected(True)
+
+    def _mark_link_down(self) -> None:
+        """Link dropped: report unavailable only if it stays down past the grace.
+
+        A reconnect within the grace cancels this, so brief blips don't flip
+        every entity to unavailable.
+        """
+        if self._closing:
+            if self._offline_handle is not None:
+                self._offline_handle.cancel()
+                self._offline_handle = None
+            self._set_connected(False)
+            return
+        if self._offline_handle is None:
+            loop = asyncio.get_running_loop()
+            self._offline_handle = loop.call_later(
+                _OFFLINE_GRACE, self._set_connected, False
+            )
 
     def _set_connected(self, connected: bool) -> None:
         """Update connection state and notify listeners on change."""
