@@ -11,6 +11,12 @@ a PIR/occupancy sensor, a timer, or any other unit. Home Assistant therefore
 always reflects the true state of the bus. This is a `local_push` integration:
 no polling, instant updates.
 
+> **Recommended:** many CNIs hold their single connection open and won't release
+> it when a client disconnects, so Home Assistant restarts would otherwise need a
+> CNI power-cycle. Install the bundled **[C-Bus CNI Relay](#avoiding-a-cni-power-cycle-on-home-assistant-restart)**
+> add-on and point the integration at it — then HA can restart/update freely with
+> no power-cycle. See the [CHANGELOG](CHANGELOG.md) for what's new.
+
 ## Quick start — fresh Home Assistant + new C-Bus project
 
 Short answer: you install the repo **and** do a 2-minute setup (point it at your
@@ -156,6 +162,9 @@ No need to hand-type `address:Name` lines unless you want to.
 | Covers (blinds/shutters with position) | ✅ |
 | Real-time feedback from physical switches | ✅ |
 | Auto-reconnect (re-runs PCI init) | ✅ |
+| Edit groups without dropping the connection | ✅ |
+| Self-healing: brief blips don't flicker entities offline | ✅ |
+| Restart HA without a CNI power-cycle (with the relay add-on) | ✅ |
 | Auto-fill group names from Toolkit `.cbz`/`.xml` | ✅ |
 | No C-Gate / no MQTT broker required | ✅ |
 
