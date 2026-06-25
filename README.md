@@ -195,6 +195,13 @@ permanent connection to the CNI and lets Home Assistant connect/disconnect to
 3. In the **Clipsal C-Bus (CNI)** integration, set **Host** to your Home
    Assistant host IP and **Port** to `10010` — i.e. point it at the relay.
 
+A full **host reboot** (not just an HA Core restart) also restarts the relay,
+and the CNI can hold the relay's old session as a zombie that rejects the new
+connection with `*** Connection already in use`. The relay now recovers from
+this automatically — it reconnects from a fixed local source port so the CNI
+drops the stale session, instead of needing a power-cycle. (The integration does
+the same when pointed straight at a CNI.)
+
 See [`cbus_relay/DOCS.md`](cbus_relay/DOCS.md) for details. (Only the relay should
 talk to the CNI — nothing else.)
 

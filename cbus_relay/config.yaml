@@ -1,6 +1,6 @@
 name: "C-Bus CNI Relay"
 description: "Persistent TCP relay that holds the single C-Bus CNI connection so Home Assistant can restart without a CNI power-cycle."
-version: "1.0.1"
+version: "1.1.0"
 slug: "cbus_relay"
 init: false
 startup: "services"
@@ -19,7 +19,9 @@ options:
   cni_host: ""
   cni_port: 10001
   listen_port: 10010
+  cni_local_port: 10011
 schema:
   cni_host: "str"
   cni_port: "port"
   listen_port: "port"
+  cni_local_port: "port"
