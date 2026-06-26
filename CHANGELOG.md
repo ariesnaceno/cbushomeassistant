@@ -7,6 +7,15 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.2.0
+- **Auto-discover groups from the bus.** New *Configure → 🔍 Auto-discover groups
+  from the bus* option. Because the integration is always in MONITOR mode, it
+  collects every group address it sees operated on the bus; walk around pressing
+  each wall switch once and the groups appear as a **checklist** to add as
+  light/switch/cover — no typing addresses, no Toolkit file needed. Re-open to
+  refresh as you operate more switches. (This is passive discovery — it finds
+  groups that get *operated*; it is not a full Toolkit-style network scan.)
+
 ### 2.1.1
 - **Unload is now crash-proof.** A failure while closing the CNI socket during
   unload no longer propagates — previously it could leave the config entry stuck

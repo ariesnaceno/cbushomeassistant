@@ -139,6 +139,12 @@ directory and restart Home Assistant.
 
 Open the integration's **Configure** button any time for a simple menu:
 
+- **🔍 Auto-discover groups from the bus** — no file, no typing. The integration
+  is always monitoring the bus, so it collects every group it sees operated.
+  **Walk around pressing each wall switch once**, then open this for a
+  **checklist** of the discovered groups to add (re-open to refresh as you press
+  more). Note: this finds groups that get *operated* — it is passive discovery,
+  not a full Toolkit-style network scan.
 - **Pick from a C-Bus Toolkit file** — enter a `.cbz`/`.xml` path and get a
   **checklist of every group**; tick the ones you want and choose the type.
 - **➕ Add a light / switch / cover** — enter a group number and name; repeat to

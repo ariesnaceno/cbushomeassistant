@@ -245,6 +245,7 @@ class CBusOptionsFlow(OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "discover_bus",
                 "pick_toolkit",
                 "add_light",
                 "add_switch",
@@ -253,6 +254,71 @@ class CBusOptionsFlow(OptionsFlow):
                 "save",
             ],
             description_placeholders={"summary": summary},
+        )
+
+    # ------------------------------------------------------------------
+    # Auto-discover groups from the live bus (passive monitor)
+    # ------------------------------------------------------------------
+    async def async_step_discover_bus(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """List groups seen active on the bus and let the user add them.
+
+        The integration is always in MONITOR mode, so any group that has been
+        operated (a wall switch pressed, a load reporting) is collected. The
+        user can keep operating switches and re-open this to refresh the list.
+        """
+        # Add the ticked groups, if this is the submit of a populated list.
+        if user_input is not None and user_input.get("groups"):
+            kind = user_input.get("type", "light")
+            for addr in user_input["groups"]:
+                self._groups[kind][str(addr)] = f"C-Bus Group {addr}"
+            return await self.async_step_init()
+
+        client = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+        seen = client.discovered_groups() if client is not None else {}
+        # Hide groups that are already configured (in any platform).
+        configured = {
+            int(addr) for kind in self._groups for addr in self._groups[kind]
+        }
+        seen = {a: lvl for a, lvl in seen.items() if a not in configured}
+
+        if not seen:
+            # Nothing new seen yet: show a refreshable note. Submitting re-checks.
+            return self.async_show_form(
+                step_id="discover_bus",
+                data_schema=vol.Schema({}),
+                errors={"base": "no_groups_seen"},
+            )
+
+        options = [
+            selector.SelectOptionDict(
+                value=str(addr),
+                label=f"Group {addr} ({'on' if lvl > 0 else 'off'})",
+            )
+            for addr, lvl in sorted(seen.items())
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required("groups"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required("type", default="light"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["light", "switch", "cover"],
+                        translation_key="cbus_kind",
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="discover_bus",
+            data_schema=schema,
+            description_placeholders={"count": str(len(seen))},
         )
 
     # ------------------------------------------------------------------

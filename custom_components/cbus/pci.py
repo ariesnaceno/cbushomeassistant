@@ -126,14 +126,17 @@ class _HAProtocol(PCIProtocol):
         super().data_received(data)
 
     def on_lighting_group_on(self, source_addr: int, group_addr: int) -> None:
+        self._client._note_seen(group_addr)
         self._client._apply_level(group_addr, CBUS_MAX_LEVEL)
 
     def on_lighting_group_off(self, source_addr: int, group_addr: int) -> None:
+        self._client._note_seen(group_addr)
         self._client._apply_level(group_addr, 0)
 
     def on_lighting_group_ramp(
         self, source_addr: int, group_addr: int, duration: int, level: int
     ) -> None:
+        self._client._note_seen(group_addr)
         self._client._apply_level(group_addr, level)
 
     def on_lighting_group_terminate_ramp(
@@ -161,6 +164,9 @@ class PCIClient:
 
         # group id -> last known level (0..255). Absent = unknown.
         self._levels: dict[int, int] = {}
+        # group ids ever seen transmitted on the bus -> last seen level.
+        # Used for passive auto-discovery in the options flow.
+        self._seen_groups: dict[int, int] = {}
         self._update_callbacks: list[Callable[[int, int], None]] = []
         self._connection_callbacks: list[Callable[[bool], None]] = []
 
@@ -387,6 +393,14 @@ class PCIClient:
         _LOGGER.debug("Group %s level -> %s", group, level)
         for callback in list(self._update_callbacks):
             callback(group, level)
+
+    def _note_seen(self, group: int) -> None:
+        """Record that a group address was transmitted on the bus (discovery)."""
+        self._seen_groups[int(group)] = self._levels.get(int(group), 0)
+
+    def discovered_groups(self) -> dict[int, int]:
+        """Return {group: last level} for every group seen active on the bus."""
+        return {g: self._levels.get(g, lvl) for g, lvl in self._seen_groups.items()}
 
     def _note_in_use(self) -> None:
         """Flag that the CNI rejected this connection as already in use."""

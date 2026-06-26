@@ -46,12 +46,21 @@
         "title": "C-Bus groups",
         "description": "Currently configured: {summary}.\n\nChoose an action.",
         "menu_options": {
+          "discover_bus": "🔍 Auto-discover groups from the bus",
           "pick_toolkit": "Pick from a C-Bus Toolkit file (checklist)",
           "add_light": "➕ Add a light",
           "add_switch": "➕ Add a switch",
           "add_cover": "➕ Add a cover",
           "remove": "🗑 Remove groups",
           "save": "💾 Save and finish"
+        }
+      },
+      "discover_bus": {
+        "title": "Auto-discover from the bus",
+        "description": "Found {count} group(s) active on the bus. Tick the ones to add and choose the entity type.\n\nTip: operate each wall switch once (so it transmits on the bus), then submit to refresh. Only groups that have been operated since Home Assistant connected appear here.",
+        "data": {
+          "groups": "Discovered groups",
+          "type": "Add as"
         }
       },
       "pick_toolkit": {
@@ -89,7 +98,8 @@
     },
     "error": {
       "invalid_project_file": "Could not read that Toolkit file. Check the path and that it is a .cbz or .xml.",
-      "no_groups_found": "No lighting groups were found in that Toolkit file."
+      "no_groups_found": "No lighting groups were found in that Toolkit file.",
+      "no_groups_seen": "No new groups seen on the bus yet. Operate a wall switch (so it transmits), then submit to refresh."
     }
   },
   "selector": {
