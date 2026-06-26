@@ -17,6 +17,11 @@ no polling, instant updates.
 > add-on and point the integration at it — then HA can restart/update freely with
 > no power-cycle. See the [CHANGELOG](CHANGELOG.md) for what's new.
 
+> **Installers:** there's a field runbook at
+> **[`docs/COMMISSIONING.md`](docs/COMMISSIONING.md)** — a tick-as-you-go
+> checklist for integrating a client site, with a site-record sheet and
+> troubleshooting quick-reference.
+
 ## Quick start — fresh Home Assistant + new C-Bus project
 
 Short answer: you install the repo **and** do a 2-minute setup (point it at your
