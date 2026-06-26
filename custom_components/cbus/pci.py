@@ -230,13 +230,19 @@ class PCIClient:
             self._offline_handle.cancel()
             self._offline_handle = None
         transport, self._transport, self._protocol = self._transport, None, None
-        _abort_transport(transport)
+        try:
+            _abort_transport(transport)
+        except Exception:  # noqa: BLE001 - shutdown must not raise
+            _LOGGER.debug("Ignoring error aborting transport on stop", exc_info=True)
         if self._connect_task:
             self._connect_task.cancel()
             try:
                 await self._connect_task
             except asyncio.CancelledError:
                 pass
+            except Exception:  # noqa: BLE001 - a failing connect task must not
+                # block unload; the task is being torn down regardless.
+                _LOGGER.debug("Connect task raised during stop", exc_info=True)
 
     async def async_turn_on(self, group: int, level: int = CBUS_MAX_LEVEL) -> None:
         """Turn a group on, optionally to a specific level (0..255)."""

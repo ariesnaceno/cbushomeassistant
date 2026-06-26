@@ -49,8 +49,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        # Always drop the client reference, and never let a failure while
+        # closing the socket propagate: if async_unload_entry raised, HA would
+        # leave the entry stuck in the non-recoverable FAILED_UNLOAD state
+        # (only a Core restart clears it). Closing is best-effort.
         client: PCIClient = hass.data[DOMAIN].pop(entry.entry_id)
-        await client.async_stop()
+        try:
+            await client.async_stop()
+        except Exception:  # noqa: BLE001 - unload must not fail on cleanup
+            _LOGGER.exception("Error stopping C-Bus client during unload")
     return unload_ok
 
 

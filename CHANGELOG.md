@@ -7,6 +7,16 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.1.1
+- **Unload is now crash-proof.** A failure while closing the CNI socket during
+  unload no longer propagates — previously it could leave the config entry stuck
+  in the non-recoverable `FAILED_UNLOAD` state (only a Core restart cleared it).
+  Reloading the integration is now always safe.
+- Added troubleshooting notes: why an output unit's local button / Toolkit
+  "flash" don't show in HA (use a transmitting input like a wall switch), and how
+  to restore live updates if the CNI monitor session is ever disrupted (Restart
+  Home Assistant Core).
+
 ### 2.1.0
 - **Availability debounce.** A brief connection blip no longer flickers every
   group to *unavailable* and back. Entities only go unavailable if the link

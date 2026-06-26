@@ -224,6 +224,17 @@ need to program with Toolkit:
 - **No state at all / commands do nothing** — check the CNI status page
   (`http://<cni-ip>/`). If it shows **C-Bus status: Power down** or unknown
   voltage, the C-Bus network itself is unpowered — fix the C-Bus power supply.
+- **A manual change isn't reflected in Home Assistant** — HA only sees what is
+  *transmitted on the bus*. A **wall switch / key input / PIR** transmits, so its
+  presses show up instantly. An **output unit's local override** (e.g. the button
+  on a relay/dimmer) and **C-Bus Toolkit's "flash"** generally do **not** put a
+  group message on the bus, so HA can't see them — this is normal C-Bus
+  behaviour, not a fault. Test feedback with a wall switch.
+- **Live updates stop syncing** (state only refreshes on reconnect) — the CNI's
+  monitor session can get disrupted by lots of connection churn (repeated CNI
+  power-cycles, a Toolkit session, etc.). Fix: **Settings → System → Restart
+  Home Assistant Core**. This re-runs the SMART+MONITOR init cleanly; with the
+  relay add-on the CNI stays up, so it's quick and needs no power-cycle.
 - Enable debug logging:
 
   ```yaml
