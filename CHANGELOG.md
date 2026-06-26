@@ -7,6 +7,11 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.2.1
+- Fix a cosmetic translation error (`formatjs MISSING_VALUE: count`) shown on the
+  Auto-discover screen when **no groups have been seen yet** — the empty-state
+  form now passes the `count` placeholder. No functional impact.
+
 ### 2.2.0
 - **Auto-discover groups from the bus.** New *Configure → 🔍 Auto-discover groups
   from the bus* option. Because the integration is always in MONITOR mode, it

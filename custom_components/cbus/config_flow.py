@@ -289,6 +289,7 @@ class CBusOptionsFlow(OptionsFlow):
                 step_id="discover_bus",
                 data_schema=vol.Schema({}),
                 errors={"base": "no_groups_seen"},
+                description_placeholders={"count": "0"},
             )
 
         options = [
