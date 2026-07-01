@@ -7,6 +7,14 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.5.0
+- **Group entities under one clean "C-Bus" device again** (reverts 2.4.0's
+  device removal, which people found less usable). The device name is now just
+  **C-Bus** — no CNI IP — so friendly names read cleanly (e.g. `C-Bus Kitchen`,
+  `C-Bus Light 00`), and a redundant leading `C-Bus ` is stripped so names never
+  double up. A per-entity custom rename still shows only your name (e.g.
+  `Kitchen`). Best of both: the device grouping is back, without the IP.
+
 ### 2.4.0
 - **Clean entity names.** Entities are no longer attached to a hub *device*, so
   their friendly name is just the group's own name (e.g. `Kitchen` or

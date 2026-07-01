@@ -7,11 +7,22 @@ from collections.abc import Callable
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, signal_options_updated
 from .pci import PCIClient
+
+
+def _clean_name(name: str) -> str:
+    """Drop a redundant leading 'C-Bus ' so the entity name doesn't double up
+    with the 'C-Bus' device name (e.g. 'C-Bus Light 00' -> 'Light 00', shown as
+    'C-Bus Light 00'). Names without the prefix (e.g. 'Kitchen') are unchanged.
+    """
+    if name and name.lower().startswith("c-bus "):
+        return name[len("c-bus "):].strip() or name
+    return name
 
 
 class CBusEntity:
@@ -22,7 +33,8 @@ class CBusEntity:
     """
 
     _attr_should_poll = False
-    _attr_has_entity_name = False
+    # Group entities under one clean "C-Bus" device (no CNI IP in the name).
+    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -35,15 +47,20 @@ class CBusEntity:
         """Initialise a C-Bus group entity."""
         self._client = client
         self._group = group
-        self._attr_name = name
+        self._attr_name = _clean_name(name)
         self._attr_unique_id = f"{entry.entry_id}_{unique_suffix}_{group}"
         self._unsub_update: Callable[[], None] | None = None
         self._unsub_conn: Callable[[], None] | None = None
-        # Intentionally NOT attached to a device. In current HA, an entity under
-        # a device gets the device name prepended to its friendly name (e.g.
-        # "C-Bus (192.168.101.3:10010) Kitchen"), which is ugly on a client
-        # dashboard. Without a device, the friendly name is just the group's
-        # own name ("Kitchen"), which is what installers want.
+        # One shared "C-Bus" device groups all groups together in the UI. The
+        # device name is deliberately just "C-Bus" (no CNI IP) so friendly names
+        # read cleanly, e.g. "C-Bus Kitchen". A per-entity custom rename still
+        # overrides this to show only the custom name.
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="C-Bus",
+            manufacturer="Clipsal",
+            model=f"C-Bus via CNI ({client.name})",
+        )
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to real-time level and connection updates."""
@@ -75,6 +92,7 @@ class CBusEntity:
     @callback
     def update_cbus_name(self, name: str) -> None:
         """Update the friendly name if it changed (no entity recreation)."""
+        name = _clean_name(name)
         if name and name != self._attr_name:
             self._attr_name = name
             if self.hass is not None:
