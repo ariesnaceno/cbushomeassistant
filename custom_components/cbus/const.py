@@ -17,6 +17,16 @@ CONF_COVER_GROUPS = "cover_groups"
 # auto-fill group names during setup. Not persisted in the config entry.
 CONF_PROJECT_FILE = "project_file"
 
+# Optional switch entity (e.g. a smart plug powering the CNI). If set, the
+# integration power-cycles it when the CNI has been unreachable for a while,
+# to clear a stuck single-session CNI after a reboot/power event.
+CONF_RECOVERY_SWITCH = "recovery_switch"
+
+# CNI auto-recovery tuning.
+RECOVERY_STALL_SECONDS = 180  # unreachable this long before power-cycling
+RECOVERY_OFF_SECONDS = 15  # how long to hold the plug off
+RECOVERY_COOLDOWN_SECONDS = 300  # minimum gap between power-cycles
+
 # A CNI's raw PCI serial-over-TCP port. Default for Clipsal CNI/CNI2.
 DEFAULT_PORT = 10001
 

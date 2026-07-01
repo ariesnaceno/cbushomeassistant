@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.util import dt as dt_util
 
-from .const import CONF_PORT, DOMAIN, PLATFORMS, signal_options_updated
+from .const import (
+    CONF_PORT,
+    CONF_RECOVERY_SWITCH,
+    DOMAIN,
+    PLATFORMS,
+    RECOVERY_COOLDOWN_SECONDS,
+    RECOVERY_OFF_SECONDS,
+    RECOVERY_STALL_SECONDS,
+    signal_options_updated,
+)
 from .pci import PCIClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,6 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    entry.async_on_unload(_setup_cni_recovery(hass, entry, client))
 
     # Close the CNI connection cleanly when Home Assistant shuts down or
     # restarts. A config entry is not always unloaded on restart, so without
@@ -59,6 +73,77 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:  # noqa: BLE001 - unload must not fail on cleanup
             _LOGGER.exception("Error stopping C-Bus client during unload")
     return unload_ok
+
+
+@callback
+def _setup_cni_recovery(hass: HomeAssistant, entry: ConfigEntry, client: PCIClient):
+    """Power-cycle a configured switch when the CNI is stuck.
+
+    Some CNIs hold their single TCP session across a client disconnect, so after
+    a reboot/power event the relay can't reconnect until the CNI is
+    power-cycled. If the user has picked a recovery switch (e.g. a smart plug
+    powering the CNI), we toggle it off/on once the connection has been down for
+    RECOVERY_STALL_SECONDS, then let the relay reconnect. A cooldown prevents
+    rapid cycling, and normal HA restarts (which recover in seconds) never reach
+    the stall threshold.
+
+    Returns an unsubscribe callable for entry.async_on_unload.
+    """
+    state = {"down_since": None, "last_cycle": None, "busy": False}
+
+    @callback
+    def _on_connection(connected: bool) -> None:
+        state["down_since"] = None if connected else (
+            state["down_since"] or dt_util.utcnow()
+        )
+
+    if not client.connected:
+        state["down_since"] = dt_util.utcnow()
+    unsub_conn = client.register_connection_callback(_on_connection)
+
+    async def _maybe_recover(now) -> None:
+        # Read the switch live so enabling it via Options takes effect without
+        # a reload.
+        switch = entry.options.get(CONF_RECOVERY_SWITCH)
+        if not switch or state["busy"] or state["down_since"] is None:
+            return
+        if (now - state["down_since"]).total_seconds() < RECOVERY_STALL_SECONDS:
+            return
+        if state["last_cycle"] and (
+            now - state["last_cycle"]
+        ).total_seconds() < RECOVERY_COOLDOWN_SECONDS:
+            return
+
+        state["busy"] = True
+        state["last_cycle"] = now
+        _LOGGER.warning(
+            "C-Bus CNI unreachable for >%ss; power-cycling recovery switch %s",
+            RECOVERY_STALL_SECONDS,
+            switch,
+        )
+        try:
+            await hass.services.async_call(
+                "switch", "turn_off", {"entity_id": switch}, blocking=True
+            )
+            await asyncio.sleep(RECOVERY_OFF_SECONDS)
+            await hass.services.async_call(
+                "switch", "turn_on", {"entity_id": switch}, blocking=True
+            )
+        except Exception:  # noqa: BLE001 - recovery must never crash the loop
+            _LOGGER.exception("C-Bus CNI recovery power-cycle failed")
+        finally:
+            state["busy"] = False
+
+    unsub_timer = async_track_time_interval(
+        hass, _maybe_recover, timedelta(seconds=30)
+    )
+
+    @callback
+    def _unsub() -> None:
+        unsub_conn()
+        unsub_timer()
+
+    return _unsub
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:

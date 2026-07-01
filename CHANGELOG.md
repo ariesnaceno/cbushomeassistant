@@ -7,6 +7,16 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.6.0
+- **Built-in CNI auto-recovery.** New *Configure → 🔌 CNI auto-recovery (smart
+  plug)* option: pick the switch entity that powers your CNI (e.g. a smart
+  plug), and the integration **power-cycles it automatically** when the CNI has
+  been unreachable for more than 3 minutes — clearing a stuck single-session
+  CNI after a full reboot, HA-OS update, or power event. 15 s off, 5-minute
+  cooldown between cycles; normal HA restarts (recover in seconds) never
+  trigger it. No hand-built automation needed — set it once during
+  commissioning.
+
 ### 2.5.0
 - **Group entities under one clean "C-Bus" device again** (reverts 2.4.0's
   device removal, which people found less usable). The device name is now just

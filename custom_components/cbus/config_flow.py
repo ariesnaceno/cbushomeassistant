@@ -23,6 +23,7 @@ from .const import (
     CONF_GROUPS,
     CONF_PORT,
     CONF_PROJECT_FILE,
+    CONF_RECOVERY_SWITCH,
     CONF_SWITCH_GROUPS,
     DEFAULT_PORT,
     DOMAIN,
@@ -230,6 +231,8 @@ class CBusOptionsFlow(OptionsFlow):
         }
         # Group {address: name} discovered from a Toolkit file, if loaded.
         self._discovered: dict[int, str] = {}
+        # Optional smart-plug entity that powers the CNI (auto-recovery).
+        self._recovery: str | None = opts.get(CONF_RECOVERY_SWITCH)
 
     # ------------------------------------------------------------------
     # Menu
@@ -252,6 +255,7 @@ class CBusOptionsFlow(OptionsFlow):
                 "add_switch",
                 "add_cover",
                 "remove",
+                "recovery",
                 "save",
             ],
             description_placeholders={"summary": summary},
@@ -479,17 +483,45 @@ class CBusOptionsFlow(OptionsFlow):
         return self.async_show_form(step_id="remove", data_schema=schema)
 
     # ------------------------------------------------------------------
+    # CNI auto-recovery switch (smart plug powering the CNI)
+    # ------------------------------------------------------------------
+    async def async_step_recovery(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pick the switch (smart plug) that powers the CNI.
+
+        When set, the integration power-cycles it automatically if the CNI has
+        been unreachable for a few minutes (a stuck single-session CNI after a
+        reboot/power event). Leave empty to disable.
+        """
+        if user_input is not None:
+            self._recovery = user_input.get(CONF_RECOVERY_SWITCH) or None
+            return await self.async_step_init()
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_RECOVERY_SWITCH,
+                    description={"suggested_value": self._recovery},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="switch")
+                )
+            }
+        )
+        return self.async_show_form(step_id="recovery", data_schema=schema)
+
+    # ------------------------------------------------------------------
     # Save
     # ------------------------------------------------------------------
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Persist the working copies as the entry options."""
-        return self.async_create_entry(
-            title="",
-            data={
-                CONF_GROUPS: self._groups["light"],
-                CONF_SWITCH_GROUPS: self._groups["switch"],
-                CONF_COVER_GROUPS: self._groups["cover"],
-            },
-        )
+        data: dict[str, Any] = {
+            CONF_GROUPS: self._groups["light"],
+            CONF_SWITCH_GROUPS: self._groups["switch"],
+            CONF_COVER_GROUPS: self._groups["cover"],
+        }
+        if self._recovery:
+            data[CONF_RECOVERY_SWITCH] = self._recovery
+        return self.async_create_entry(title="", data=data)

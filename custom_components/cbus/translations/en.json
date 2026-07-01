@@ -52,6 +52,7 @@
           "add_switch": "➕ Add a switch",
           "add_cover": "➕ Add a cover",
           "remove": "🗑 Remove groups",
+          "recovery": "🔌 CNI auto-recovery (smart plug)",
           "save": "💾 Save and finish"
         }
       },
@@ -94,6 +95,11 @@
         "title": "Remove groups",
         "description": "Tick the groups to remove, then submit.",
         "data": { "remove": "Groups to remove" }
+      },
+      "recovery": {
+        "title": "CNI auto-recovery",
+        "description": "Pick the switch (e.g. a smart plug) that powers your CNI. If the CNI is unreachable for more than 3 minutes — a stuck session after a reboot or power event — the integration power-cycles it automatically (15 s off, 5-minute cooldown). Leave empty to disable. Don't forget 💾 Save and finish.",
+        "data": { "recovery_switch": "Switch that powers the CNI" }
       }
     },
     "error": {
