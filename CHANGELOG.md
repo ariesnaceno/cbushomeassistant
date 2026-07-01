@@ -7,6 +7,15 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.4.0
+- **Clean entity names.** Entities are no longer attached to a hub *device*, so
+  their friendly name is just the group's own name (e.g. `Kitchen` or
+  `C-Bus Group 5`) instead of being prefixed with `C-Bus (192.168.101.3:10010) …`.
+  In current Home Assistant the device name is prepended to every entity under
+  it, which looked cluttered on dashboards — dropping the device fixes that for
+  default, Toolkit-imported, and existing entities alike. (Entity IDs are
+  unchanged; group entities by **Area** instead of by device.)
+
 ### 2.3.0
 - **Upload the C-Bus Toolkit file directly** in *Configure → 📁 Upload a C-Bus
   Toolkit file* — drag-and-drop (or browse to) a `.cbz`/`.xml`, instead of

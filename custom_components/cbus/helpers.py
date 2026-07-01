@@ -7,7 +7,6 @@ from collections.abc import Callable
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -40,12 +39,11 @@ class CBusEntity:
         self._attr_unique_id = f"{entry.entry_id}_{unique_suffix}_{group}"
         self._unsub_update: Callable[[], None] | None = None
         self._unsub_conn: Callable[[], None] | None = None
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name=f"C-Bus ({client.name})",
-            manufacturer="Clipsal",
-            model="C-Bus via CNI",
-        )
+        # Intentionally NOT attached to a device. In current HA, an entity under
+        # a device gets the device name prepended to its friendly name (e.g.
+        # "C-Bus (192.168.101.3:10010) Kitchen"), which is ugly on a client
+        # dashboard. Without a device, the friendly name is just the group's
+        # own name ("Kitchen"), which is what installers want.
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to real-time level and connection updates."""
