@@ -150,8 +150,9 @@ Open the integration's **Configure** button any time for a simple menu:
   **checklist** of the discovered groups to add (re-open to refresh as you press
   more). Note: this finds groups that get *operated* — it is passive discovery,
   not a full Toolkit-style network scan.
-- **Pick from a C-Bus Toolkit file** — enter a `.cbz`/`.xml` path and get a
-  **checklist of every group**; tick the ones you want and choose the type.
+- **📁 Upload a C-Bus Toolkit file** — drag in (or browse to) a `.cbz`/`.xml`
+  backup and get a **checklist of every group with its real name**; tick the
+  ones you want and choose the type. No need to copy the file onto the host.
 - **➕ Add a light / switch / cover** — enter a group number and name; repeat to
   add more.
 - **🗑 Remove groups** — tick groups to remove.

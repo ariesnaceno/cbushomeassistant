@@ -7,6 +7,7 @@ from typing import Any
 
 import voluptuous as vol
 
+from homeassistant.components.file_upload import process_uploaded_file
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -328,22 +329,35 @@ class CBusOptionsFlow(OptionsFlow):
     async def async_step_pick_toolkit(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for a Toolkit .cbz/.xml path and parse its groups."""
+        """Upload a Toolkit .cbz/.xml file and parse its groups."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            path = (user_input.get(CONF_PROJECT_FILE) or "").strip()
+            file_id = user_input[CONF_PROJECT_FILE]
+
+            def _parse(fid: str) -> dict[int, str]:
+                # process_uploaded_file hands us a temp path for the uploaded
+                # file inside a context manager and cleans it up afterwards.
+                with process_uploaded_file(self.hass, fid) as path:
+                    return parse_toolkit_file(str(path))
+
             try:
                 self._discovered = await self.hass.async_add_executor_job(
-                    parse_toolkit_file, path
+                    _parse, file_id
                 )
-            except OSError:
+            except (OSError, ValueError, KeyError):
                 errors["base"] = "invalid_project_file"
             if not errors and not self._discovered:
                 errors["base"] = "no_groups_found"
             if not errors:
                 return await self.async_step_pick()
 
-        schema = vol.Schema({vol.Required(CONF_PROJECT_FILE): str})
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_PROJECT_FILE): selector.FileSelector(
+                    selector.FileSelectorConfig(accept=".cbz,.xml")
+                )
+            }
+        )
         return self.async_show_form(
             step_id="pick_toolkit", data_schema=schema, errors=errors
         )

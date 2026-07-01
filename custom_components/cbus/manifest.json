@@ -3,10 +3,11 @@
   "name": "Clipsal C-Bus (CNI)",
   "codeowners": ["@ariesnaceno"],
   "config_flow": true,
+  "dependencies": ["file_upload"],
   "documentation": "https://github.com/ariesnaceno/cbushomeassistant",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/ariesnaceno/cbushomeassistant/issues",
   "loggers": ["cbus"],
   "requirements": ["six"],
-  "version": "2.2.1"
+  "version": "2.3.0"
 }

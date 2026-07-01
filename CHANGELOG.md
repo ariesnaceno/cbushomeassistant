@@ -7,6 +7,13 @@ All notable changes to the **Clipsal C-Bus (CNI)** integration and the bundled
 
 ## Integration
 
+### 2.3.0
+- **Upload the C-Bus Toolkit file directly** in *Configure → 📁 Upload a C-Bus
+  Toolkit file* — drag-and-drop (or browse to) a `.cbz`/`.xml`, instead of
+  copying it onto the Home Assistant host and typing a path. Uses HA's built-in
+  file-upload; the file is parsed for group names then discarded. Adds a
+  `file_upload` manifest dependency.
+
 ### 2.2.1
 - Fix a cosmetic translation error (`formatjs MISSING_VALUE: count`) shown on the
   Auto-discover screen when **no groups have been seen yet** — the empty-state
