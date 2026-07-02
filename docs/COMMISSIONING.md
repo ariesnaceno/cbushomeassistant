@@ -88,6 +88,18 @@ Pick one (auto-discover is fastest on a powered site):
       isn't a light (fan, pump, gate) → **switch**; blind/shutter → cover.
 - [ ] Assign entities to **HA Areas** so dashboards/voice work cleanly.
 
+## 6b. CNI auto-recovery (recommended for unattended sites)
+- [ ] Fit a **smart plug / DIN smart relay** (locally controlled — Zigbee/Z-Wave/
+      local Tuya/Shelly, not cloud-only) on the **CNI's power supply** and add it
+      to HA as a `switch` entity.
+- [ ] Integration → **Configure → 🔌 CNI auto-recovery (smart plug)** → pick that
+      switch → **💾 Save and finish**.
+- [ ] Behaviour: if the CNI is unreachable for **3+ minutes** (stuck session
+      after a full reboot / HA-OS update / power event), the integration
+      power-cycles it automatically (15 s off, 5-min cooldown). Normal HA
+      restarts never trigger it. With this set, the site **never needs a manual
+      CNI power-cycle**.
+
 ## 7. Verify (do this with the client watching)
 - [ ] **HA → C-Bus:** toggle a few entities in HA → loads respond.
 - [ ] **C-Bus → HA:** press the **wall switches** → HA entities update live
